@@ -4,6 +4,8 @@ An AI agent that turns a plain-English request — *"onboard our Postgres analyt
 
 **Complete.** All six phases built. New here? Read **[GETTING_STARTED.md](GETTING_STARTED.md)** instead — it walks through setup and the demo step by step.
 
+Other docs: **[SETUP.md](SETUP.md)** to install and run · **[WORKFLOW.md](WORKFLOW.md)** for the execution map — what runs, in what order, calling what, from the browser to the downloaded zip.
+
 ---
 
 ## Quick start
