@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dsoa"
+version = "0.1.0"
+description = "AI-Powered Data Source Onboarding Agent"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+markers = [
+    "integration: needs live services (docker compose up)",
+]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# These are the seeds of the Phase 3 standards profile. Whatever ruff enforces
+# on hand-written code, the validator will enforce on generated code.
+select = ["E", "F", "W", "I", "N", "UP", "B", "S", "C4", "SIM", "ANN"]
+ignore = [
+    "ANN401",  # Any is legitimate for driver-level objects
+    "S101",    # assert is fine in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN", "S105", "S106", "SLF001"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]

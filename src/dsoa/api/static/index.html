@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Source Onboarding Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   DESIGN: Chat-style agent UI — conversation on the left, artifacts on right.
+   ============================================================================ */
+:root {
+  --bg:       #0A0F1C;
+  --surface:  #111827;
+  --surface2: #1A2235;
+  --border:   #1F2A40;
+  --text:     #E8EDF5;
+  --text-dim: #8896B0;
+  --text-muted:#4B5975;
+  --accent:   #3B82F6;
+  --accent-h: #2563EB;
+  --green:    #10B981;
+  --green-bg: rgba(16,185,129,0.12);
+  --red:      #EF4444;
+  --red-bg:   rgba(239,68,68,0.12);
+  --yellow:   #F59E0B;
+  --yellow-bg:rgba(245,158,11,0.12);
+
+  --font:     'Inter', system-ui, -apple-system, sans-serif;
+  --mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header -------------------------------------------------------------- */
+header {
+  background: linear-gradient(135deg, rgba(17,24,39,0.95), rgba(26,34,53,0.95));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 50;
+}
+.logo {
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #3B82F6, #10B981);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 800; color: #fff;
+  box-shadow: 0 2px 12px rgba(59,130,246,0.3);
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+h1 {
+  font-family: var(--font);
+  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  background: linear-gradient(90deg, #60A5FA, #34D399);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: slideInRight 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.tagline { color: var(--text-muted); font-size: 12px; }
+#health {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+#health::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(16,185,129,0.5);
+}
+
+/* --- Main layout --------------------------------------------------------- */
+.app {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .chat-column { width: 100% !important; max-width: none; border-bottom: 1px solid var(--border); }
+  .sidebar { width: 100% !important; max-width: none; border-bottom: 1px solid var(--border); border-right: none !important; }
+  .resizer { display: none; }
+}
+
+/* --- Sidebar ------------------------------------------------------------- */
+.sidebar {
+  width: 250px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.new-btn {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: transparent; border: 1px dashed var(--border);
+  color: var(--text); padding: 8px; border-radius: 8px; cursor: pointer;
+  font-family: var(--font); font-size: 13px; transition: all 0.2s;
+}
+.new-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.05); }
+
+.history-list {
+  flex: 1; overflow-y: auto;
+  display: flex; flex-direction: column; padding: 10px 8px; gap: 4px;
+}
+.history-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  transition: background 0.15s;
+}
+.history-item:hover { background: var(--surface2); }
+.history-item.active { background: rgba(59,130,246,0.1); border-left: 3px solid var(--accent); }
+.history-content { flex: 1; overflow: hidden; }
+.history-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.history-status { font-family: var(--mono); font-size: 10px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; }
+.history-del { 
+  background: transparent; border: none; color: var(--text-muted); cursor: pointer;
+  padding: 4px; border-radius: 4px; display: flex; opacity: 0; transition: opacity 0.2s, background 0.2s;
+}
+.history-item:hover .history-del { opacity: 1; }
+.history-del:hover { background: var(--red-bg); color: var(--red); }
+
+/* --- Left: Chat column --------------------------------------------------- */
+.chat-column {
+  display: flex;
+  flex-direction: column;
+  width: 45%;
+  min-width: 320px;
+  max-width: 80vw;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* --- Resizer ------------------------------------------------------------- */
+.resizer {
+  width: 4px;
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.resizer:hover, .resizer.dragging {
+  background: var(--accent);
+}
+
+/* Chat thread */
+.chat-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-behavior: smooth;
+}
+.chat-thread::-webkit-scrollbar { width: 5px; }
+.chat-thread::-webkit-scrollbar-track { background: transparent; }
+.chat-thread::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Welcome state */
+.welcome {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 40px 20px;
+}
+.welcome-icon {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(16,185,129,0.15));
+  border: 1px solid rgba(59,130,246,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; margin-bottom: 16px;
+}
+.welcome h2 {
+  font-size: 18px; font-weight: 700; margin-bottom: 6px;
+  color: var(--text);
+}
+.welcome p { color: var(--text-dim); font-size: 13px; max-width: 340px; margin-bottom: 20px; }
+
+.suggestions {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 400px;
+}
+.suggestions button {
+  text-align: left; padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim); font-family: var(--font); font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.4;
+}
+.suggestions button:hover {
+  background: var(--surface2);
+  border-color: rgba(59,130,246,0.3);
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Chat bubbles */
+.msg {
+  display: flex; gap: 10px;
+  max-width: 95%;
+  animation: fadeUp 0.25s ease;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg.agent { align-self: flex-start; }
+
+.msg-avatar {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.msg.user .msg-avatar { background: linear-gradient(135deg, #6366F1, #8B5CF6); color: #fff; }
+.msg.agent .msg-avatar { background: linear-gradient(135deg, #3B82F6, #10B981); color: #fff; }
+
+.msg-body {
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.msg.user .msg-body {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.msg.agent .msg-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 4px;
+}
+.msg-body .label {
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--accent); margin-bottom: 6px;
+}
+
+/* Spec details inside bubble */
+.spec-grid {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  font-family: var(--mono); font-size: 11.5px;
+  margin-top: 8px;
+}
+.spec-grid dt { color: var(--text-dim); }
+.spec-grid dd { color: var(--text); word-break: break-all; }
+
+/* Clarification questions inside bubble */
+.q-block { margin-top: 8px; }
+.q-item {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.q-item .q-text { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.q-item .q-why { color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+.q-item input, .q-item select {
+  width: 100%; padding: 8px 10px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono); font-size: 12px;
+}
+.q-item input:focus, .q-item select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+.q-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* Status/note badges */
+.note-inline {
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.note-inline.warn { background: var(--yellow-bg); color: var(--yellow); border-left: 3px solid var(--yellow); }
+.note-inline.bad  { background: var(--red-bg);    color: var(--red);    border-left: 3px solid var(--red); }
+.note-inline.ok   { background: var(--green-bg);  color: var(--green);  border-left: 3px solid var(--green); }
+
+/* Typing indicator */
+.typing { display: flex; gap: 4px; padding: 8px 0; }
+.typing span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-dim);
+  animation: typeBounce 1.2s infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typeBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* --- Input bar ----------------------------------------------------------- */
+.input-bar {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.input-wrap {
+  display: flex; align-items: flex-end; gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 6px 6px 6px 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+#prompt {
+  flex: 1;
+  border: none; background: transparent;
+  color: var(--text);
+  font-family: var(--font); font-size: 14px;
+  resize: none;
+  min-height: 22px; max-height: 120px;
+  line-height: 1.5;
+  padding: 6px 0;
+  outline: none;
+}
+#prompt::placeholder { color: var(--text-muted); }
+#send-btn {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+#send-btn:hover:not(:disabled) { background: var(--accent-h); transform: scale(1.05); }
+#send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+#send-btn svg { width: 18px; height: 18px; }
+
+/* --- Right: Output column ------------------------------------------------ */
+.output-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 300px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.15);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.tabs button {
+  padding: 12px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font); font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.tabs button:hover { color: var(--text-dim); background: rgba(255,255,255,0.02); }
+.tabs button.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  text-shadow: 0 0 12px rgba(59,130,246,0.25);
+}
+
+.tab-body {
+  flex: 1; overflow-y: auto; padding: 20px;
+}
+.tab-body::-webkit-scrollbar { width: 5px; }
+.tab-body::-webkit-scrollbar-track { background: transparent; }
+.tab-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100%; text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.empty-state .icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+
+/* --- Data display (right panel) ------------------------------------------ */
+.flag {
+  display: inline-block; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.06em; padding: 3px 8px; text-transform: uppercase;
+  border-radius: 4px; font-weight: 600;
+}
+.flag.pass { background: var(--green-bg); color: var(--green); }
+.flag.fail { background: var(--red-bg);   color: var(--red); }
+.flag.wait { background: var(--yellow-bg); color: var(--yellow); }
+
+.checks-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px; background: var(--border); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; margin-top: 12px;
+}
+.check-item {
+  background: var(--surface);
+  padding: 8px 12px;
+  font-family: var(--mono); font-size: 11.5px;
+  display: flex; gap: 8px; align-items: center;
+}
+.check-item .mark { font-weight: 700; }
+.check-item.ok .mark  { color: var(--green); }
+.check-item.bad .mark { color: var(--red); }
+.check-item.bad { background: var(--red-bg); }
+
+dl.kv {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 3px 14px;
+  font-family: var(--mono); font-size: 12px;
+}
+dl.kv dt { color: var(--text-dim); }
+dl.kv dd { word-break: break-all; }
+
+pre.code {
+  margin: 0; padding: 16px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #D6E2F0;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+  overflow: auto; max-height: 600px;
+  margin-top: 12px;
+}
+
+table.schema {
+  width: 100%; border-collapse: collapse;
+  font-family: var(--mono); font-size: 11.5px;
+  margin-top: 12px;
+}
+table.schema th {
+  text-align: left; color: var(--text-dim); font-weight: 500;
+  border-bottom: 1px solid var(--border); padding: 6px 10px;
+}
+table.schema td { padding: 5px 10px; border-bottom: 1px solid rgba(31,42,64,0.5); }
+
+.note {
+  border-left: 3px solid var(--accent);
+  background: rgba(0,0,0,0.2);
+  padding: 10px 14px; font-size: 13px;
+  margin-bottom: 10px; border-radius: 0 6px 6px 0;
+}
+.note.warn { border-left-color: var(--yellow); background: var(--yellow-bg); }
+.note.bad  { border-left-color: var(--red);    background: var(--red-bg); }
+
+/* Connection test */
+.cred-label { display: block; margin-bottom: 10px; }
+.cred-label span {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  display: block; margin-bottom: 4px;
+}
+.cred-label input {
+  width: 100%; padding: 8px 10px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono); font-size: 12px;
+}
+.cred-label input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+/* Buttons */
+.btn {
+  font-family: var(--font); font-size: 13px; font-weight: 600;
+  padding: 8px 16px; cursor: pointer;
+  border: none; background: var(--accent); color: #fff;
+  border-radius: 8px; transition: all 0.2s;
+}
+.btn:hover:not(:disabled) { background: var(--accent-h); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.25); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+.btn.ghost:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.hidden { display: none !important; }
+.spin::after { content: "…"; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0% { content: "."; } 33% { content: ".."; } 66% { content: "…"; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <h1>Data Source Onboarding Agent</h1>
+    </div>
+  </div>
+  <span id="health">checking</span>
+</header>
+
+<div class="app">
+  <!-- Left-most: Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <button class="new-btn" id="new-req-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        New Request
+      </button>
+    </div>
+    <div class="history-list" id="history-list">
+      <!-- items go here -->
+    </div>
+  </div>
+
+  <!-- Resizer for sidebar -->
+  <div class="resizer" id="sidebar-resizer"></div>
+
+  <!-- Left: Chat -->
+  <div class="chat-column" id="chat-column">
+    <div class="chat-thread" id="chat-thread">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">🔌</div>
+        <h2>What would you like to connect?</h2>
+        <p>Describe your data source in plain English — I'll generate a production-ready Python connector.</p>
+        <div class="suggestions" id="suggestions">
+          <button data-fill="Onboard our local Postgres source at localhost port 55432, database dsoa_source, read-only.">🐘 Connect a local PostgreSQL database</button>
+          <button data-fill="Onboard the MySQL orders database.">🐬 Connect a MySQL database (incomplete — shows clarification)</button>
+          <button data-fill="Onboard a public REST API at https://jsonplaceholder.typicode.com. The path to fetch users is /users. No authentication is required.">🌐 Connect a public REST API</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-wrap">
+        <textarea id="prompt" rows="1" placeholder="Describe your data source…" autocomplete="off"></textarea>
+        <button id="send-btn" title="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resizer -->
+  <div class="resizer" id="resizer"></div>
+
+  <!-- Right: Output -->
+  <div class="output-column">
+    <div class="tabs" id="tabs">
+      <button data-tab="checks" class="on">Standards</button>
+      <button data-tab="code">Code</button>
+      <button data-tab="connect">Connection</button>
+      <button data-tab="artifact">Artifact</button>
+    </div>
+    <div class="tab-body">
+      <div id="tab-checks">
+        <div class="empty-state"><div class="icon">📋</div>Submit a request to see standards compliance.</div>
+      </div>
+      <div id="tab-code" class="hidden">
+        <div class="empty-state"><div class="icon">💻</div>No connector generated yet.</div>
+      </div>
+      <div id="tab-connect" class="hidden">
+        <div class="empty-state"><div class="icon">🔗</div>Generate a connector first, then test your connection.</div>
+      </div>
+      <div id="tab-artifact" class="hidden">
+        <div class="empty-state"><div class="icon">📦</div>No artifact bundle yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+let state = null;
+
+/* --- HTTP ---------------------------------------------------------------- */
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try { detail = (await response.json()).detail || detail; } catch (e) { /* keep statusText */ }
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/* --- Chat helpers -------------------------------------------------------- */
+
+function addMsg(type, html) {
+  $("welcome")?.remove();
+  const thread = $("chat-thread");
+  const div = document.createElement("div");
+  div.className = `msg ${type}`;
+  const avatarLabel = type === "user" ? "You" : "AI";
+  div.innerHTML = `
+    <div class="msg-avatar">${type === "user" ? "U" : "⚡"}</div>
+    <div class="msg-body">${html}</div>`;
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const div = addMsg("agent", `<div class="typing"><span></span><span></span><span></span></div>`);
+  div.id = "typing-indicator";
+  return div;
+}
+
+function removeTyping() {
+  const el = $("typing-indicator");
+  if (el) el.remove();
+}
+
+/* --- Paint functions (right panel) --------------------------------------- */
+
+function paintChecks() {
+  const c = state && state.connector;
+  if (!c || !c.checks) { $("tab-checks").innerHTML = `<div class="empty-state"><div class="icon">📋</div>No connector generated yet.</div>`; return; }
+
+  const grid = c.checks.map(k =>
+    `<div class="check-item ${k.passed ? "ok" : "bad"}"><span class="mark">${k.passed ? "PASS" : "FAIL"}</span>${k.name}</div>`
+  ).join("");
+
+  const findings = (c.findings || []).length
+    ? `<h3 style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:20px 0 8px">Findings</h3>` +
+      c.findings.map(f => `<div class="note ${f.severity === "error" ? "bad" : "warn"}">
+          <strong>${escapeHtml(f.check)}</strong>${f.line ? ` &middot; line ${f.line}` : ""} &mdash; ${escapeHtml(f.message)}
+          ${f.remedy ? `<br><span style="color:var(--text-dim);font-size:12px">Fix: ${escapeHtml(f.remedy)}</span>` : ""}
+        </div>`).join("")
+    : "";
+
+  const warnings = (c.warnings || []).map(w => `<div class="note warn">${escapeHtml(w)}</div>`).join("");
+
+  $("tab-checks").innerHTML = `
+    <div style="margin-bottom:14px">
+      <span class="flag ${c.accepted ? "pass" : "fail"}">${c.accepted ? "accepted" : "rejected"}</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--text-dim);margin-left:10px">${escapeHtml(c.summary)}</span>
+    </div>
+    ${warnings}
+    <div class="checks-grid">${grid}</div>
+    ${findings}`;
+}
+
+function paintCode() {
+  const c = state && state.connector;
+  if (!c || !c.code) { $("tab-code").innerHTML = `<div class="empty-state"><div class="icon">💻</div>No connector generated yet.</div>`; return; }
+  $("tab-code").innerHTML = `
+    <dl class="kv" style="margin-bottom:12px">
+      <dt>module</dt><dd>${escapeHtml(c.module_name)}</dd>
+      <dt>template</dt><dd>${escapeHtml(c.template_key)} v${escapeHtml(c.template_version)}</dd>
+      <dt>spec sha</dt><dd>${escapeHtml(c.spec_checksum)}</dd>
+      <dt>code sha</dt><dd>${escapeHtml(c.code_checksum)}</dd>
+      <dt>repairs</dt><dd>${c.repair_iterations}</dd>
+    </dl>
+    <pre class="code">${escapeHtml(c.code)}</pre>`;
+}
+
+function paintConnect() {
+  const c = state && state.connector;
+  if (!c || !c.code) { $("tab-connect").innerHTML = `<div class="empty-state"><div class="icon">🔗</div>Generate a connector first.</div>`; return; }
+
+  const vars = ((state.artifact && state.artifact.manifest && state.artifact.manifest.required_env) || [])
+    .filter(v => v.endsWith("USERNAME") || v.endsWith("PASSWORD"));
+
+  const t = state.sandbox;
+  const result = (t && t.summary)
+    ? `<div class="note ${t.success ? "" : "bad"}" style="margin-top:14px">
+         <span class="flag ${t.success ? "pass" : "fail"}">${t.success ? "connected" : "failed"}</span>
+         <span style="font-family:var(--mono);font-size:12px;margin-left:8px">${escapeHtml(t.summary)}</span>
+       </div>` + (t.tables && t.tables.length ? renderSchema(t.tables) : "")
+    : "";
+
+  $("tab-connect").innerHTML = `
+    <p style="font-size:13px;color:var(--text-dim);margin-top:0">
+      Credentials are sent once for this test. They are not stored, logged, or written to the artifact.
+    </p>
+    ${vars.map(v => `<label class="cred-label">
+        <span>${escapeHtml(v)}</span>
+        <input type="${v.endsWith("PASSWORD") ? "password" : "text"}" data-cred="${escapeHtml(v)}">
+      </label>`).join("")}
+    <div class="actions"><button class="btn" id="run-test">Run connection test</button></div>
+    ${result}`;
+
+  const button = $("run-test");
+  if (button) button.addEventListener("click", runTest);
+}
+
+function renderSchema(tables) {
+  return `<h3 style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:20px 0 8px">
+      Schema &mdash; ${tables.length} tables</h3>
+    <table class="schema"><thead><tr><th>table</th><th>columns</th><th>primary key</th></tr></thead><tbody>
+    ${tables.map(t => `<tr>
+      <td>${escapeHtml(t.schema)}.${escapeHtml(t.name)}</td>
+      <td>${t.columns.length}</td>
+      <td>${escapeHtml(t.columns.filter(c => c.primary_key).map(c => c.name).join(", ") || "—")}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+function paintArtifact() {
+  const a = state && state.artifact;
+  if (!a || !a.name) { $("tab-artifact").innerHTML = `<div class="empty-state"><div class="icon">📦</div>No artifact yet.</div>`; return; }
+  $("tab-artifact").innerHTML = `
+    <dl class="kv" style="margin-bottom:14px">
+      <dt>name</dt><dd>${escapeHtml(a.name)}</dd>
+      <dt>version</dt><dd>${escapeHtml(a.version)}</dd>
+      <dt>checksum</dt><dd>${escapeHtml(a.checksum)}</dd>
+      <dt>files</dt><dd>${a.files.map(escapeHtml).join(", ")}</dd>
+    </dl>
+    <div class="actions">
+      <a href="/api/requests/${state.id}/download" download><button class="btn">📥 Download bundle</button></a>
+    </div>
+    <h3 style="font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);margin:20px 0 8px">Manifest</h3>
+    <pre class="code">${escapeHtml(JSON.stringify(a.manifest, null, 2))}</pre>`;
+}
+
+function paintRightPanel() {
+  paintChecks();
+  paintCode();
+  paintConnect();
+  paintArtifact();
+}
+
+/* --- Chat: paint extraction into conversation ---------------------------- */
+
+function paintExtractionInChat() {
+  const ex = state.extraction;
+  if (!ex) return;
+
+  let html = `<div class="label">Extraction Result</div>`;
+
+  // Security findings
+  const notes = [];
+  (ex.security_findings || []).forEach(f => {
+    const cls = f.kind === "credential" ? "bad" : "warn";
+    notes.push(`<div class="note-inline ${cls}"><strong>${escapeHtml(f.label)}</strong> — ${escapeHtml(f.detail)}</div>`);
+  });
+  (ex.notes || []).forEach(n => notes.push(`<div class="note-inline ok">${escapeHtml(n)}</div>`));
+  html += notes.join("");
+
+  // Spec summary
+  const d = ex.draft || {};
+  const rows = [
+    ["confidence", `${(ex.confidence * 100).toFixed(0)}%`],
+    ["source type", d.source_type || "—"],
+    ["class", d.connector_name || "—"],
+    ["host", d.host || d.base_url || "—"],
+    ["port", d.port || "—"],
+    ["database", d.database || "—"],
+    ["auth", d.auth_method || "—"],
+    ["access", d.read_only === false ? "read-write" : "read-only"],
+  ];
+  if ((ex.assumed || []).length) rows.push(["assumed", ex.assumed.join(", ")]);
+  if ((ex.missing || []).length) rows.push(["missing", `<span class="flag fail">${ex.missing.join(", ")}</span>`]);
+
+  html += `<dl class="spec-grid">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+
+  // Generate button if ready
+  let btnId = null;
+  if (ex.ready) {
+    btnId = 'gen-' + Math.random().toString(36).substr(2, 9);
+    html += `<div class="actions"><button class="btn" id="${btnId}">⚡ Generate Connector</button></div>`;
+  }
+
+  addMsg("agent", html);
+
+  // Wire up generate button
+  if (btnId) {
+    const genBtn = $(btnId);
+    if (genBtn) genBtn.addEventListener("click", () => generate(btnId));
+  }
+}
+
+function paintQuestionsInChat() {
+  const qs = (state.extraction && state.extraction.questions) || [];
+  if (!qs.length) return;
+
+  const btnId = 'ans-' + Math.random().toString(36).substr(2, 9);
+  let html = `<div class="label">I need a few more details</div><div class="q-block">`;
+  qs.forEach(q => {
+    const control = q.options && q.options.length
+      ? `<select data-field="${q.field}"><option value="">— choose —</option>${
+          q.options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("")}</select>`
+      : `<input type="text" data-field="${q.field}" placeholder="${escapeHtml(q.example || "")}">`;
+    html += `<div class="q-item">
+      <div class="q-text">${escapeHtml(q.question)}</div>
+      <div class="q-why">${escapeHtml(q.why)}</div>
+      ${control}
+    </div>`;
+  });
+  html += `</div><div class="q-actions"><button class="btn" id="${btnId}">Submit answers</button></div>`;
+
+  const msgEl = addMsg("agent", html);
+
+  $(btnId).addEventListener("click", () => applyAnswers(msgEl, btnId));
+}
+
+/* --- Actions ------------------------------------------------------------- */
+
+async function submit() {
+  const prompt = $("prompt").value.trim();
+  if (!prompt) return;
+
+  addMsg("user", escapeHtml(prompt));
+  $("prompt").value = "";
+  autoResize();
+
+  const typing = addTyping();
+  $("send-btn").disabled = true;
+
+  try {
+    state = await api("/api/requests", { method: "POST", body: JSON.stringify({ prompt }) });
+    removeTyping();
+    paintExtractionInChat();
+    paintQuestionsInChat();
+    paintRightPanel();
+    loadHistory();
+  } catch (e) {
+    removeTyping();
+    addMsg("agent", `<div class="note-inline bad">Extraction failed: ${escapeHtml(e.message)}</div>`);
+  } finally {
+    $("send-btn").disabled = false;
+  }
+}
+
+async function applyAnswers(msgEl, btnId) {
+  const answers = {};
+  msgEl.querySelectorAll(".q-item [data-field]").forEach(el => {
+    if (el.value.trim()) answers[el.dataset.field] = el.value.trim();
+  });
+  if (!Object.keys(answers).length) return;
+
+  // Show user's answers as a message
+  const answerText = Object.entries(answers).map(([k, v]) => `<strong>${escapeHtml(k)}</strong>: ${escapeHtml(v)}`).join("<br>");
+  addMsg("user", answerText);
+
+  const typing = addTyping();
+  const btn = $(btnId);
+  if (btn) btn.disabled = true;
+
+  try {
+    state = await api(`/api/requests/${state.id}/answers`, { method: "POST", body: JSON.stringify({ answers }) });
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Update answers";
+    }
+    removeTyping();
+    paintExtractionInChat();
+    paintQuestionsInChat();
+    paintRightPanel();
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Submit answers";
+    }
+    removeTyping();
+    addMsg("agent", `<div class="note-inline bad">Could not apply answers: ${escapeHtml(e.message)}</div>`);
+  }
+}
+
+async function generate(btnId) {
+  addMsg("user", "Generate the connector");
+  const typing = addTyping();
+  const btn = $(btnId);
+  if (btn) btn.disabled = true;
+
+  try {
+    state = await api(`/api/requests/${state.id}/generate`, { method: "POST" });
+    removeTyping();
+
+    const c = state.connector;
+    let html = `<div class="label">Connector Generated</div>`;
+    html += `<div class="note-inline ${c.accepted ? "ok" : "bad"}">${c.accepted ? "✓ Accepted" : "✗ Rejected"} — ${escapeHtml(c.summary)}</div>`;
+    html += `<p style="font-size:12px;color:var(--text-dim);margin-top:8px">Check the <strong>Standards</strong>, <strong>Code</strong>, and <strong>Artifact</strong> tabs on the right for full details.</p>`;
+    addMsg("agent", html);
+
+    paintRightPanel();
+    showTab("checks");
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    removeTyping();
+    addMsg("agent", `<div class="note-inline bad">Generation failed: ${escapeHtml(e.message)}</div>`);
+  }
+}
+
+async function runTest() {
+  const credentials = {};
+  document.querySelectorAll("#tab-connect [data-cred]").forEach(el => {
+    if (el.value) credentials[el.dataset.cred] = el.value;
+  });
+  const button = $("run-test");
+  if (button) { button.disabled = true; button.textContent = "Testing…"; }
+
+  try {
+    state = await api(`/api/requests/${state.id}/test`, { method: "POST", body: JSON.stringify({ credentials }) });
+
+    const t = state.sandbox;
+    let html = `<div class="label">Connection Test</div>`;
+    html += `<div class="note-inline ${t.success ? "ok" : "bad"}">${t.success ? "✓ Connected" : "✗ Failed"} — ${escapeHtml(t.summary)}</div>`;
+    addMsg("agent", html);
+
+    paintRightPanel();
+    showTab("connect");
+  } catch (e) {
+    addMsg("agent", `<div class="note-inline bad">Connection test failed: ${escapeHtml(e.message)}</div>`);
+  } finally {
+    const b = $("run-test");
+    if (b) { b.disabled = false; b.textContent = "Run connection test"; }
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  ["checks", "code", "connect", "artifact"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== name));
+}
+
+/* --- Sidebar Actions ----------------------------------------------------- */
+
+async function loadHistory() {
+  try {
+    const res = await api("/api/requests");
+    const list = $("history-list");
+    list.innerHTML = "";
+    if (res.requests.length === 0) {
+      list.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-muted); font-size: 12px;">No requests yet</div>`;
+      return;
+    }
+    res.requests.forEach(req => {
+      const el = document.createElement("div");
+      el.className = `history-item ${state && state.id === req.id ? 'active' : ''}`;
+      el.innerHTML = `
+        <div class="history-content">
+          <div class="history-title">${escapeHtml(req.prompt || "New Request")}</div>
+          <div class="history-status">${escapeHtml(req.status)}</div>
+        </div>
+        <button class="history-del" title="Delete" data-id="${req.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6"/></svg>
+        </button>
+      `;
+      el.addEventListener("click", (e) => {
+        if (!e.target.closest('.history-del')) {
+          loadRequest(req.id);
+        }
+      });
+      el.querySelector('.history-del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteRequest(req.id);
+      });
+      list.appendChild(el);
+    });
+  } catch (e) {
+    console.error("Failed to load history:", e);
+  }
+}
+
+async function deleteRequest(id) {
+  try {
+    await api(`/api/requests/${id}`, { method: "DELETE" });
+    if (state && state.id === id) {
+      startNewRequest();
+    }
+    loadHistory();
+  } catch (e) {
+    alert("Could not delete request: " + e.message);
+  }
+}
+
+async function loadRequest(id) {
+  try {
+    state = await api(`/api/requests/${id}`);
+    loadHistory(); // update active state
+    
+    // Clear chat thread
+    const thread = $("chat-thread");
+    thread.innerHTML = "";
+    
+    // Simulate chat history
+    addMsg("user", escapeHtml(state.prompt));
+    
+    if (state.extraction && Object.keys(state.extraction).length > 0) {
+      paintExtractionInChat();
+      if (state.extraction.questions && state.extraction.questions.length > 0 && state.status === "needs_clarification") {
+        paintQuestionsInChat();
+      }
+    }
+    
+    if (state.connector && Object.keys(state.connector).length > 0) {
+      let html = `<div class="label">Connector Generated</div>`;
+      html += `<div class="note-inline ${state.connector.accepted ? "ok" : "bad"}">${state.connector.accepted ? "✓ Accepted" : "✗ Rejected"} — ${escapeHtml(state.connector.summary)}</div>`;
+      html += `<p style="font-size:12px;color:var(--text-dim);margin-top:8px">Check the <strong>Standards</strong>, <strong>Code</strong>, and <strong>Artifact</strong> tabs on the right for full details.</p>`;
+      addMsg("agent", html);
+    }
+    
+    paintRightPanel();
+    showTab("checks");
+  } catch (e) {
+    alert("Could not load request: " + e.message);
+  }
+}
+
+function startNewRequest() {
+  state = null;
+  loadHistory();
+  const thread = $("chat-thread");
+  thread.innerHTML = `
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">🔌</div>
+        <h2>What would you like to connect?</h2>
+        <p>Describe your data source in plain English — I'll generate a production-ready Python connector.</p>
+        <div class="suggestions" id="suggestions">
+          <button data-fill="Onboard our local Postgres source at localhost port 55432, database dsoa_source, read-only.">🐘 Connect a local PostgreSQL database</button>
+          <button data-fill="Onboard the MySQL orders database.">🐬 Connect a MySQL database (incomplete — shows clarification)</button>
+          <button data-fill="Onboard a public REST API at https://jsonplaceholder.typicode.com. The path to fetch users is /users. No authentication is required.">🌐 Connect a public REST API</button>
+        </div>
+      </div>
+  `;
+  document.querySelectorAll("[data-fill]").forEach(b =>
+    b.addEventListener("click", () => {
+      $("prompt").value = b.dataset.fill;
+      autoResize();
+      $("prompt").focus();
+    })
+  );
+  paintRightPanel();
+}
+
+/* --- Auto-resize textarea ------------------------------------------------ */
+
+function autoResize() {
+  const el = $("prompt");
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+/* --- Wiring -------------------------------------------------------------- */
+
+$("send-btn").addEventListener("click", submit);
+$("prompt").addEventListener("input", autoResize);
+$("prompt").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+});
+
+document.querySelectorAll("[data-fill]").forEach(b =>
+  b.addEventListener("click", () => {
+    $("prompt").value = b.dataset.fill;
+    autoResize();
+    $("prompt").focus();
+  })
+);
+
+document.querySelectorAll("#tabs button").forEach(b =>
+  b.addEventListener("click", () => showTab(b.dataset.tab))
+);
+
+$("new-req-btn").addEventListener("click", startNewRequest);
+
+api("/api/health").then(h => {
+  $("health").textContent = h.live_model ? "live model" : "offline — scripted";
+}).catch(() => { $("health").textContent = "api unreachable"; });
+
+loadHistory();
+
+/* --- Resizer ------------------------------------------------------------- */
+const resizer = $("resizer");
+const leftPanel = $("chat-column");
+let isDragging = false;
+
+const sidebarResizer = $("sidebar-resizer");
+const sidebar = $("sidebar");
+let isDraggingSidebar = false;
+
+if (resizer) {
+  resizer.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    resizer.classList.add("dragging");
+    document.body.style.cursor = "col-resize";
+    e.preventDefault();
+  });
+}
+
+if (sidebarResizer) {
+  sidebarResizer.addEventListener("mousedown", (e) => {
+    isDraggingSidebar = true;
+    sidebarResizer.classList.add("dragging");
+    document.body.style.cursor = "col-resize";
+    e.preventDefault();
+  });
+}
+
+document.addEventListener("mousemove", (e) => {
+  if (isDraggingSidebar) {
+    sidebar.style.width = Math.max(150, e.clientX) + "px";
+  } else if (isDragging) {
+    // The width of the chat column should be clientX minus the sidebar width
+    const sidebarWidth = sidebar ? sidebar.getBoundingClientRect().width : 0;
+    // Plus we must account for the sidebar resizer width if any, but getBoundingClientRect includes everything we need.
+    const newWidth = e.clientX - sidebarWidth - 4; // 4px is resizer width
+    leftPanel.style.width = Math.max(320, newWidth) + "px";
+  }
+});
+
+document.addEventListener("mouseup", () => {
+  if (isDragging) {
+    isDragging = false;
+    if (resizer) resizer.classList.remove("dragging");
+    document.body.style.cursor = "default";
+  }
+  if (isDraggingSidebar) {
+    isDraggingSidebar = false;
+    if (sidebarResizer) sidebarResizer.classList.remove("dragging");
+    document.body.style.cursor = "default";
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+# {{ spec.connector_name }}
+
+{{ spec.description or "Generated data source connector." }}
+
+| | |
+|---|---|
+| Source type | {{ dialect.label if dialect else "REST API" }} |
+| Target | `{{ target_summary }}` |
+| Access | {{ "Read-only" if spec.options.read_only else "Read-write" if spec.source_type.is_sql else "Read-only (GET)" }} |
+| Template | `{{ artifact.template_key }}` v{{ artifact.template_version }} |
+| Artifact version | {{ artifact.semver }} |
+| Spec checksum | `{{ artifact.spec_checksum }}` |
+| Code checksum | `{{ artifact.code_checksum }}` |
+| Generated | {{ artifact.generated_at }} |
+
+## Install
+
+```bash
+pip install -r requirements.txt
+```
+
+## Configure
+
+This connector reads every value from the environment. Nothing is hardcoded, so
+the same file promotes across environments without regeneration.
+
+```bash
+{% for var in spec.auth.secret_env_vars %}
+export {{ var }}="..."          # required
+{% endfor %}
+{% if spec.source_type.is_sql %}
+export {{ spec.auth.env_prefix }}HOST="{{ spec.sql_target.host }}"
+export {{ spec.auth.env_prefix }}PORT="{{ spec.sql_target.port }}"
+export {{ spec.auth.env_prefix }}DATABASE="{{ spec.sql_target.database }}"
+{% else %}
+export {{ spec.auth.env_prefix }}BASE_URL="{{ spec.rest_target.base_url }}"
+{% endif %}
+```
+
+Optional tuning, all with sensible defaults:
+
+| Variable | Default | Purpose |
+|---|---|---|
+{% if spec.source_type.is_sql %}
+| `{{ spec.auth.env_prefix }}SSL_MODE` | `{{ spec.options.ssl_mode }}` | TLS negotiation mode |
+| `{{ spec.auth.env_prefix }}CONNECT_TIMEOUT_SECONDS` | `{{ spec.options.connect_timeout_seconds }}` | Connection timeout |
+| `{{ spec.auth.env_prefix }}QUERY_TIMEOUT_SECONDS` | `{{ spec.options.query_timeout_seconds }}` | Statement timeout |
+| `{{ spec.auth.env_prefix }}POOL_SIZE` | `{{ spec.options.pool_size }}` | Connection pool size |
+{% else %}
+| `{{ spec.auth.env_prefix }}TIMEOUT_SECONDS` | `30` | Request timeout |
+{% endif %}
+| `{{ spec.auth.env_prefix }}MAX_RETRIES` | `{{ spec.options.max_retries if spec.source_type.is_sql else 3 }}` | Retries on transient failure |
+
+> Credentials belong in your secret manager, not in a `.env` committed to git.
+> The connector only ever reads them from the process environment.
+
+## Use
+
+```python
+from {{ spec.slug }}_connector import {{ spec.connector_name }}
+
+with {{ spec.connector_name }}.from_env() as conn:
+    result = conn.test_connection()
+    print(result.summary())
+
+    for table in conn.fetch_schema():
+        print(table.qualified_name, len(table.columns), "columns")
+
+    rows = conn.read(
+        "SELECT * FROM your_table WHERE some_column = :value",
+        {"value": "example"},
+        limit=100,
+    )
+```
+
+The connector is a context manager, so the connection is closed even if the
+block raises.
+
+## Behaviour worth knowing
+
+{% if spec.source_type.is_sql %}
+{% if spec.options.read_only %}
+- **Read-only.** `read()` rejects `INSERT`, `UPDATE`, `DELETE`, and `DROP`
+  before the statement reaches the server.
+{% else %}
+- **Read-write.** This connector permits write statements. Confirm that matches
+  the access your service account should have.
+{% endif %}
+- **Parameters are bound, never interpolated.** Pass values through `params`;
+  building SQL with f-strings is rejected by the project's validator.
+- **Multi-statement payloads are rejected.** One statement per `read()` call.
+{% else %}
+- **Read-only.** The connector makes `GET` requests and returns JSON.
+{% endif %}
+- **Transient failures retry** with exponential backoff and jitter. Authentication failures do not retry —
+  repeatedly sending a rejected password locks accounts.
+- **`test_connection()` returns a result, it does not raise.** A failed check is
+  data you can inspect and log.
+
+## Standards conformance
+
+{{ artifact.report.checks_passed }}/{{ artifact.report.checks_run }} checks passed
+at generation time.
+
+{% for check in checks %}
+- [x] {{ check }}
+{% endfor %}
+
+## Regenerating
+
+This file is generated. Do not edit it by hand — edits are lost on the next run
+and break the checksum linking this artifact to its onboarding request.
+
+To change behaviour, update the source spec and regenerate.

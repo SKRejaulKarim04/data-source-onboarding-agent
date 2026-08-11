@@ -1,0 +1,37 @@
+{
+  "name": "dsoa-tasks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Task runner for the Data Source Onboarding Agent (replaces the Makefile). The backend stays Python; this is bash + Node.js orchestration, the React front end in frontend/, and a Docker-free local Postgres.",
+  "scripts": {
+    "setup": "bash bin/install.sh",
+    "serve": "bash bin/serve.sh",
+    "dev": "bash bin/dev.sh",
+    "ui:install": "bash bin/ui.sh install",
+    "ui:build": "bash bin/ui.sh build",
+    "ui:dev": "bash bin/ui.sh dev",
+    "ui:typecheck": "npm --prefix frontend run typecheck",
+    "up": "node bin/pg.js up",
+    "down": "node bin/pg.js down",
+    "reset": "node bin/pg.js reset",
+    "status": "node bin/pg.js status",
+    "logs": "node bin/pg.js logs",
+    "psql": "node bin/pg.js psql",
+    "test": "bash bin/test.sh all",
+    "test:unit": "bash bin/test.sh unit",
+    "test:integration": "bash bin/test.sh integration",
+    "lint": "bash bin/lint.sh",
+    "fmt": "bash bin/lint.sh fix",
+    "smoke": "bash bin/run-py.sh scripts/smoke_test.py",
+    "demo": "bash bin/run-py.sh scripts/extract_demo.py --offline \"Onboard the vendor billing API\"",
+    "generate": "bash bin/run-py.sh scripts/generate_demo.py",
+    "generate:faults": "bash bin/run-py.sh scripts/generate_demo.py --break-it",
+    "eval": "bash bin/run-py.sh eval/runner.py --json eval/report.json",
+    "eval:offline": "bash bin/run-py.sh eval/runner.py --offline",
+    "clean": "bash bin/clean.sh"
+  },
+  "dependencies": {
+    "embedded-postgres": "18.4.0-beta.17",
+    "pg": "^8.13.0"
+  }
+}

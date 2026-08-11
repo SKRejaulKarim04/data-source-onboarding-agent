@@ -1,0 +1,29 @@
+/* ============================================================================
+   Design tokens. One source of truth for the palette, typography and the
+   handful of geometry values that more than one component needs to agree on.
+   ========================================================================= */
+:root {
+  --bg: #0a0f1c;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1f2a40;
+  --text: #e8edf5;
+  --text-dim: #8896b0;
+  --text-muted: #4b5975;
+  --accent: #3b82f6;
+  --accent-h: #2563eb;
+  --green: #10b981;
+  --green-bg: rgba(16, 185, 129, 0.12);
+  --red: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.12);
+  --yellow: #f59e0b;
+  --yellow-bg: rgba(245, 158, 11, 0.12);
+
+  --font: "Inter", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --resizer-width: 4px;
+}

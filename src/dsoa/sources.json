@@ -1,0 +1,59 @@
+{
+  "postgresql": {
+    "is_sql": true,
+    "default_port": 5432,
+    "dialect": {
+      "label": "PostgreSQL",
+      "driver": "postgresql+psycopg",
+      "default_port": 5432,
+      "version_query": "SELECT version()",
+      "connect_args": [
+        ["connect_timeout", "self.config.connect_timeout_seconds"],
+        ["sslmode", "self.config.ssl_mode"],
+        ["application_name", "self.config.application_name"],
+        ["options", "f\"-c statement_timeout={self.config.query_timeout_seconds * 1000}\""]
+      ],
+      "driver_package": "psycopg[binary]>=3.1"
+    }
+  },
+  "mysql": {
+    "is_sql": true,
+    "default_port": 3306,
+    "dialect": {
+      "label": "MySQL",
+      "driver": "mysql+pymysql",
+      "default_port": 3306,
+      "version_query": "SELECT VERSION()",
+      "connect_args": [
+        ["connect_timeout", "self.config.connect_timeout_seconds"],
+        ["read_timeout", "self.config.query_timeout_seconds"],
+        ["write_timeout", "self.config.query_timeout_seconds"],
+        ["charset", "\"utf8mb4\""],
+        ["program_name", "self.config.application_name"]
+      ],
+      "driver_package": "pymysql>=1.1"
+    }
+  },
+  "sqlserver": {
+    "is_sql": true,
+    "default_port": 1433,
+    "dialect": {
+      "label": "Microsoft SQL Server",
+      "driver": "mssql+pyodbc",
+      "default_port": 1433,
+      "version_query": "SELECT @@VERSION",
+      "connect_args": [
+        ["timeout", "self.config.query_timeout_seconds"]
+      ],
+      "url_query": {
+        "driver": "ODBC Driver 18 for SQL Server",
+        "TrustServerCertificate": "yes"
+      },
+      "driver_package": "pyodbc>=5.1"
+    }
+  },
+  "rest_api": {
+    "is_sql": false,
+    "default_port": null
+  }
+}

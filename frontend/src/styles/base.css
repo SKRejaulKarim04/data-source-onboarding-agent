@@ -1,0 +1,126 @@
+/* Reset, page frame, and the three-column shell. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* --- Shell ---------------------------------------------------------------- */
+
+.app {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Below 900px the columns stack. `!important` is doing real work here: the
+   resizers write inline widths, and a stacked layout has to beat them. */
+@media (max-width: 900px) {
+  .app {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .sidebar,
+  .chat-column {
+    width: 100% !important;
+    max-width: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar {
+    max-height: 220px;
+  }
+  .chat-column {
+    min-height: 60vh;
+  }
+  .resizer {
+    display: none;
+  }
+}
+
+/* --- Scrollbars ----------------------------------------------------------- */
+
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.scroll-y::-webkit-scrollbar {
+  width: 5px;
+}
+.scroll-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-y::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* --- Resizer -------------------------------------------------------------- */
+
+.resizer {
+  width: var(--resizer-width);
+  background: var(--border);
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 10;
+  border: none;
+  padding: 0;
+  transition: background 0.2s;
+  touch-action: none;
+}
+.resizer:hover,
+.resizer.dragging,
+.resizer:focus-visible {
+  background: var(--accent);
+  outline: none;
+}
+
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

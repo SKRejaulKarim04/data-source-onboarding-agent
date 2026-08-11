@@ -1,0 +1,65 @@
+{#-
+  REST API connector template.
+-#}
+"""{{ spec.description or spec.connector_name }}
+
+REST API connector for {{ target_summary }}.
+
+GENERATED FILE — do not edit by hand.
+Regenerate from the spec instead; hand edits are lost on the next run and break
+the checksum that ties this artifact to its request.
+
+    template   {{ meta.template_name }} v{{ meta.template_version }}
+    spec       {{ meta.spec_checksum }}
+    generated  {{ meta.generated_at }}
+
+Usage::
+
+    from {{ spec.slug }}_connector import {{ spec.connector_name }}
+
+    with {{ spec.connector_name }}.from_env() as conn:
+        print(conn.test_connection().summary())
+        for table in conn.fetch_schema():
+            print(table.qualified_name)
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, ClassVar
+
+from dsoa.connectors.config import RestConnectionConfig
+from dsoa.connectors.rest_base import RestBaseConnector
+
+
+def _env_or(prefix: str, suffix: str, fallback: str) -> str:
+    """Return the environment value for ``prefix + suffix``, or ``fallback``."""
+    value = os.environ.get(f"{prefix}{suffix}")
+    return value if value else fallback
+
+
+class {{ spec.connector_name }}(RestBaseConnector):
+    """REST API connector for the {{ spec.slug }} source."""
+
+    source_type: ClassVar[str] = "{{ spec.source_type.value }}"
+    default_path: ClassVar[str] = "{{ spec.rest_target.default_path or '' }}"
+    env_prefix: ClassVar[str] = "{{ spec.auth.env_prefix }}"
+
+    DEFAULT_BASE_URL: ClassVar[str] = "{{ spec.rest_target.base_url }}"
+
+    @classmethod
+    def from_env(cls, prefix: str | None = None) -> {{ spec.connector_name }}:
+        """Build the connector from environment variables.
+
+        Reads {{ spec.auth.env_prefix }}BASE_URL for the target.
+        Non-secret values fall back to the defaults above.
+
+        Returns:
+            A configured connector. No connection is opened until first use.
+        """
+        resolved_prefix = prefix or cls.env_prefix
+        config = RestConnectionConfig.from_env(
+            resolved_prefix,
+            base_url=_env_or(resolved_prefix, "BASE_URL", cls.DEFAULT_BASE_URL),
+        )
+        return cls(config)

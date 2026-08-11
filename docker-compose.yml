@@ -1,0 +1,32 @@
+# Optional. The default local workflow (`npm run up`) no longer needs Docker —
+# it runs Postgres as a plain local process via bin/pg.js. Kept here for
+# environments that do have Docker and would rather use it; both paths seed
+# from the same docker/postgres/01_seed.sql.
+#
+# MySQL, SQL Server, and the REST stub are deliberately absent. They arrive in
+# Phase 3 when there is a template to generate against. Standing up five
+# services before one connector works is how a fortnight disappears.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dsoa-postgres
+    environment:
+      POSTGRES_USER: dsoa
+      POSTGRES_PASSWORD: dsoa_local_dev
+      POSTGRES_DB: dsoa_source
+    ports:
+      - "55432:5432"          # non-standard host port: avoids clashing with a
+                              # local Postgres you may already be running
+    volumes:
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+      - dsoa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dsoa -d dsoa_source"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  dsoa_pgdata:

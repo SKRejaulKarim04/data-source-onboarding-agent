@@ -1,0 +1,29 @@
+/* Line-numbered code block. The gutter is a grid column rather than padding so
+   wrapped lines stay aligned under their own first line. */
+
+.code-with-lines {
+  display: block;
+}
+
+.code-with-lines code {
+  display: block;
+  font: inherit;
+}
+
+.code-line {
+  display: grid;
+  grid-template-columns: 4ch 1fr;
+  gap: 0 14px;
+}
+
+.code-line .ln {
+  color: var(--text-muted);
+  text-align: right;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.code-line .lc {
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -1,0 +1,123 @@
+{#-
+  SQL connector template.
+
+  Renders a complete, standards-compliant connector from a SourceSpec with no
+  LLM involvement at all. That is the point of the whole architecture: the model
+  understands the request, the template writes the code, so conformance is
+  structural rather than probabilistic.
+
+  Compare the output against src/dsoa/connectors/postgresql.py — the hand-written
+  reference. They should be near-identical, because the reference is what this
+  template was written by diffing against.
+
+  Whitespace note: the environment sets trim_blocks and lstrip_blocks, so a tag
+  alone on a line disappears cleanly. Do NOT add `{%-` to these tags — the extra
+  strip eats the preceding newline and collapses loop bodies onto one line.
+
+  Context: spec (SourceSpec), dialect (DialectProfile), meta (GenerationMeta).
+-#}
+"""{{ spec.description or spec.connector_name }}
+
+{{ dialect.label }} connector for {{ target_summary }}.
+
+GENERATED FILE — do not edit by hand.
+Regenerate from the spec instead; hand edits are lost on the next run and break
+the checksum that ties this artifact to its request.
+
+    template   {{ meta.template_name }} v{{ meta.template_version }}
+    spec       {{ meta.spec_checksum }}
+    generated  {{ meta.generated_at }}
+
+Credentials are read from the environment at runtime and never appear here:
+
+{% for var in spec.auth.secret_env_vars %}
+    {{ var }}
+{% endfor %}
+
+Usage::
+
+    from {{ spec.slug }}_connector import {{ spec.connector_name }}
+
+    with {{ spec.connector_name }}.from_env() as conn:
+        print(conn.test_connection().summary())
+        for table in conn.fetch_schema():
+            print(table.qualified_name)
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, ClassVar
+
+from dsoa.connectors.config import SqlConnectionConfig
+from dsoa.connectors.sql_base import SQLBaseConnector
+
+
+def _env_or(prefix: str, suffix: str, fallback: str) -> str:
+    """Return the environment value for ``prefix + suffix``, or ``fallback``."""
+    value = os.environ.get(f"{prefix}{suffix}")
+    return value if value else fallback
+
+
+class {{ spec.connector_name }}(SQLBaseConnector):
+    """{{ dialect.label }} connector for the {{ spec.slug }} source.
+
+    {% if spec.options.read_only %}
+    Read-only: write statements are rejected before they reach the server.
+    {% else %}
+    Read-write: this connector permits writes. Confirm that is intended.
+    {% endif %}
+    """
+
+    source_type: ClassVar[str] = "{{ spec.source_type.value }}"
+    driver: ClassVar[str] = "{{ dialect.driver }}"
+    default_port: ClassVar[int] = {{ dialect.default_port }}
+    version_query: ClassVar[str] = "{{ dialect.version_query }}"
+    default_schema: ClassVar[str | None] = {{ ('"%s"' % spec.sql_target.schema_name) if spec.sql_target.schema_name else 'None' }}
+    read_only: ClassVar[bool] = {{ spec.options.read_only }}
+    env_prefix: ClassVar[str] = "{{ spec.auth.env_prefix }}"
+{% if dialect.url_query %}
+    url_query: ClassVar[dict[str, str]] = {
+{% for key, value in dialect.url_query.items() %}
+        "{{ key }}": "{{ value }}",
+{% endfor %}
+    }
+{% endif %}
+
+    #: Defaults captured from the onboarding request. Every one is overridable
+    #: through the environment, so the same artifact promotes across
+    #: dev/stage/prod without regeneration.
+    DEFAULT_HOST: ClassVar[str] = "{{ spec.sql_target.host }}"
+    DEFAULT_PORT: ClassVar[int] = {{ spec.sql_target.port }}
+    DEFAULT_DATABASE: ClassVar[str] = "{{ spec.sql_target.database }}"
+
+    def _connect_args(self) -> dict[str, Any]:
+        """Driver-level keyword arguments for {{ dialect.label }}."""
+        return {
+{% for key, expr in dialect.connect_args %}
+            "{{ key }}": {{ expr }},
+{% endfor %}
+        }
+
+    @classmethod
+    def from_env(cls, prefix: str | None = None) -> {{ spec.connector_name }}:
+        """Build the connector from environment variables.
+
+        Reads {{ spec.auth.env_prefix }}HOST, {{ spec.auth.env_prefix }}PORT and
+        {{ spec.auth.env_prefix }}DATABASE for the target, plus
+{% for var in spec.auth.secret_env_vars %}
+        {{ var }}
+{% endfor %}
+        for credentials. Non-secret values fall back to the defaults above.
+
+        Returns:
+            A configured connector. No connection is opened until first use.
+        """
+        resolved_prefix = prefix or cls.env_prefix
+        config = SqlConnectionConfig.from_env(
+            resolved_prefix,
+            default_port=cls.DEFAULT_PORT,
+            host=_env_or(resolved_prefix, "HOST", cls.DEFAULT_HOST),
+            database=_env_or(resolved_prefix, "DATABASE", cls.DEFAULT_DATABASE),
+        )
+        return cls(config)
