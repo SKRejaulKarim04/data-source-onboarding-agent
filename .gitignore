@@ -10,13 +10,18 @@ node_modules/
 .mypy_cache/
 .coverage
 htmlcov/
-dist/
-build/
 *.egg-info/
+
+# Leading slash = repo root only. Unanchored, these match at any depth — which
+# is how `artifacts/` silently swallowed the src/dsoa/artifacts source package.
+/dist/
+/build/
 *.db
 .DS_Store
 .idea/
 .vscode/
 .claude/settings.local.json
-generated_connectors/
-artifacts/
+
+# Generated connectors and artifact bundles are kept in the repo on purpose:
+# they are the output this project exists to produce, and having examples
+# checked in means you can read one without running the pipeline first.
