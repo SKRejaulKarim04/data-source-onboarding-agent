@@ -9,7 +9,10 @@ const DATA_DIR = path.join(ROOT, '.pgdata');
 module.exports = {
   ROOT,
   DATA_DIR,
-  LOG_FILE: path.join(DATA_DIR, 'postgres.log'),
+  // Deliberately NOT inside DATA_DIR: initdb refuses to initialise a cluster in
+  // a directory that already has anything in it, and the daemon logs its first
+  // line before it calls initdb. A log file there breaks every first run.
+  LOG_FILE: path.join(ROOT, '.pgdata.log'),
   PID_FILE: path.join(DATA_DIR, 'pg.pid'),
   STOP_FILE: path.join(DATA_DIR, 'stop.request'),
   SEEDED_FILE: path.join(DATA_DIR, '.seeded'),

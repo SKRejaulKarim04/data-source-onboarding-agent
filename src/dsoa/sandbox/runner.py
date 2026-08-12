@@ -14,15 +14,22 @@ For production you run this same runner *inside* the container described in the
 plan — non-root, read-only filesystem, egress allowlisted to the target host.
 The interface does not change; only the wrapper does.
 
+**What you get on Windows:** less. There is no ``preexec_fn`` and no ``rlimit``,
+so the memory and CPU caps do not apply — the wall-clock timeout and the
+scrubbed environment are the whole of it. The child still runs in its own
+process group, so a timeout takes its descendants with it. Everything else about
+the interface is identical, which is the point: the same code path runs
+everywhere, and only the strength of the box changes.
+
 Being clear about that boundary matters more than pretending it is airtight.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
-import resource
 import subprocess
 import sys
 import tempfile
@@ -31,7 +38,14 @@ from pathlib import Path
 
 from ..agent.spec import SourceSpec
 
+try:  # POSIX only. Windows has no rlimits, and importing this fails there.
+    import resource
+except ImportError:  # pragma: no cover - exercised on Windows, not in CI
+    resource = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
+
+IS_WINDOWS = os.name == "nt"
 
 DEFAULT_TIMEOUT_SECONDS = 30
 DEFAULT_MEMORY_MB = 512
@@ -40,6 +54,30 @@ DEFAULT_MEMORY_MB = 512
 #: generated connector cannot read ANTHROPIC_API_KEY or the app's own database
 #: password even if it tries.
 _ALLOWED_BASE_ENV = ("PATH", "LANG", "LC_ALL", "PYTHONPATH", "HOME")
+
+#: Windows needs a few more before a child interpreter will even start. Without
+#: SYSTEMROOT the socket and SSL layers fail to initialise, which surfaces as an
+#: import error from inside the sandbox rather than as a connection failure —
+#: an unhelpful way to learn that your environment was too clean.
+_ALLOWED_WINDOWS_ENV = (
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "PATHEXT",
+    "COMSPEC",
+    "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE",
+)
+
+
+def _allowed_base_env() -> tuple[str, ...]:
+    """The platform's minimum viable environment for a child interpreter."""
+    if IS_WINDOWS:
+        return _ALLOWED_BASE_ENV + _ALLOWED_WINDOWS_ENV
+    return _ALLOWED_BASE_ENV
+
 
 #: Executed inside the sandbox. Imports the candidate module, finds the
 #: connector class, runs the checks, and prints one JSON line.
@@ -81,9 +119,19 @@ def main() -> int:
             ]
             out["success"] = True
         else:
-            out["error_type"] = getattr(result, "error_type", "ConnectionError") or "ConnectionError"
-            out["error"] = getattr(result, "error", "Connection failed") or "Connection failed"
-            
+            out["error_type"] = (
+                getattr(result, "error_type", None) or "ConnectionError"
+            )
+            # ConnectionTestResult calls this error_message; `error` is kept as a
+            # fallback for any result object that names it differently. Reading
+            # only `error` silently reported "Connection failed" for every
+            # failure, which told neither the user nor the repair loop anything.
+            out["error"] = (
+                getattr(result, "error_message", None)
+                or getattr(result, "error", None)
+                or "Connection failed"
+            )
+
         connector.close()
     except Exception as exc:
         out["error_type"] = type(exc).__name__
@@ -161,21 +209,32 @@ class ConnectionSandbox:
 
         started = time.perf_counter()
 
-        with tempfile.TemporaryDirectory(prefix="dsoa-sandbox-") as tmpdir:
+        # ignore_cleanup_errors: on Windows a file the child still holds open
+        # cannot be deleted, and losing a temp directory is not worth failing a
+        # connection test over.
+        with tempfile.TemporaryDirectory(
+            prefix="dsoa-sandbox-", ignore_cleanup_errors=True
+        ) as tmpdir:
             module_path = Path(tmpdir) / "candidate.py"
-            module_path.write_text(code)
+            module_path.write_text(code, encoding="utf-8")
             runner_path = Path(tmpdir) / "_runner.py"
-            runner_path.write_text(_RUNNER)
+            runner_path.write_text(_RUNNER, encoding="utf-8")
 
             try:
                 completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
                     [sys.executable, str(runner_path), str(module_path), spec.connector_name],
                     capture_output=True,
                     text=True,
+                    # Decode the child explicitly. Without this the parent uses
+                    # the locale encoding, which on Windows is cp1252 and turns
+                    # any non-ASCII character in a driver's error message into a
+                    # UnicodeDecodeError instead of a readable failure.
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=self._timeout,
                     cwd=tmpdir,
                     env=self._child_env(spec, credentials or {}),
-                    preexec_fn=self._apply_limits,  # noqa: PLW1509
+                    **self._isolation_kwargs(),
                 )
             except subprocess.TimeoutExpired:
                 return SandboxResult(
@@ -228,7 +287,7 @@ class ConnectionSandbox:
         the parent's environment is exposed until someone remembers to add it —
         which is exactly the kind of thing nobody remembers.
         """
-        env = {key: os.environ[key] for key in _ALLOWED_BASE_ENV if key in os.environ}
+        env = {key: os.environ[key] for key in _allowed_base_env() if key in os.environ}
 
         prefix = spec.auth.env_prefix
         for key, value in os.environ.items():
@@ -245,27 +304,43 @@ class ConnectionSandbox:
         env.setdefault("PYTHONUNBUFFERED", "1")
         return env
 
+    def _isolation_kwargs(self) -> dict[str, object]:
+        """Platform-specific arguments that put the child in its own group.
+
+        A new session (POSIX) or process group (Windows) means a timeout kills
+        the connector's descendants too, rather than orphaning whatever a driver
+        spawned. ``preexec_fn`` does not exist on Windows, so the rlimits go with
+        it — there, the wall-clock timeout is the only bound, which is stated in
+        the module docstring rather than quietly assumed.
+        """
+        if IS_WINDOWS:
+            return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        return {
+            "start_new_session": True,
+            "preexec_fn": self._apply_limits,  # noqa: PLW1509
+        }
+
     def _apply_limits(self) -> None:  # pragma: no cover - runs in the child
         """Apply resource limits before exec. Called in the forked child."""
+        if resource is None:  # pragma: no cover - Windows never gets here
+            return
+
         limit_bytes = self._memory_mb * 1024 * 1024
-        
+
         def safe_setrlimit(res: int, limits: tuple[int, int]) -> None:
-            try:
+            # AttributeError: not every POSIX platform defines every limit.
+            with contextlib.suppress(ValueError, OSError, AttributeError):
                 resource.setrlimit(res, limits)
-            except (ValueError, OSError):
-                pass
-                
+
+        # RLIMIT_AS on macOS counts reserved address space, not resident memory,
+        # so a normal driver import trips it. Skipped there rather than tuned to
+        # a number that means nothing.
         if sys.platform != "darwin":
             safe_setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-            
+
         safe_setrlimit(resource.RLIMIT_CPU, (self._timeout, self._timeout))
         safe_setrlimit(resource.RLIMIT_NPROC, (64, 64))
         safe_setrlimit(resource.RLIMIT_CORE, (0, 0))
-        
-        try:
-            os.setsid()
-        except OSError:
-            pass
 
     @staticmethod
     def _parse(stdout: str) -> dict | None:

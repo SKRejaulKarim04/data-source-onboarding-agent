@@ -66,7 +66,7 @@ class Artifact:
         for path, content in self.files.items():
             target = root / path
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content)
+            target.write_text(content, encoding="utf-8")
         return root
 
 

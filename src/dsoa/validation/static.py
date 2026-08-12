@@ -80,7 +80,7 @@ class StaticValidator:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "candidate.py"
-            path.write_text(source)
+            path.write_text(source, encoding="utf-8")
 
             for enabled, name, runner in (
                 (self._run_ruff, "ruff", self._ruff),
@@ -129,6 +129,8 @@ class StaticValidator:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=TOOL_TIMEOUT_SECONDS,
         )
         if not result.stdout.strip():
@@ -165,6 +167,8 @@ class StaticValidator:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=TOOL_TIMEOUT_SECONDS,
         )
         if result.returncode == 0:
@@ -184,6 +188,8 @@ class StaticValidator:
             [executable, "-f", "json", "-q", str(path)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=TOOL_TIMEOUT_SECONDS,
         )
         if not result.stdout.strip():

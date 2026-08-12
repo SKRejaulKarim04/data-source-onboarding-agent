@@ -25,3 +25,4 @@ htmlcov/
 # Generated connectors and artifact bundles are kept in the repo on purpose:
 # they are the output this project exists to produce, and having examples
 # checked in means you can read one without running the pipeline first.
+.pgdata.log

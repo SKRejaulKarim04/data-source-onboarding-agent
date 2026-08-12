@@ -221,7 +221,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    data = yaml.safe_load(Path(args.cases).read_text())
+    data = yaml.safe_load(Path(args.cases).read_text(encoding="utf-8"))
     cases = data["cases"]
     if args.category:
         cases = [c for c in cases if c.get("category") == args.category]
@@ -266,7 +266,8 @@ def main() -> int:
                     ],
                 },
                 indent=2,
-            )
+            ),
+            encoding="utf-8",
         )
         print(f"{DIM}Report written to {args.json}{RESET}\n")
 

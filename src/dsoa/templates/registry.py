@@ -43,7 +43,7 @@ import json
 from pathlib import Path
 
 _sources_path = Path(__file__).parent.parent / "sources.json"
-with open(_sources_path) as _f:
+with open(_sources_path, encoding="utf-8") as _f:
     _sources_data = json.load(_f)
 
 DIALECTS: dict[SourceType, DialectProfile] = {}

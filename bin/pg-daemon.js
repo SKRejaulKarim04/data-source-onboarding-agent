@@ -4,7 +4,11 @@
 // asks it to stop by dropping a marker file, since Windows doesn't deliver
 // POSIX signals the way a cross-platform stop handshake would need.
 const fs = require('fs');
-const EmbeddedPostgres = require('embedded-postgres');
+// embedded-postgres ships as ESM with a CJS interop shim, so `require` returns
+// either the class or `{ default: class }` depending on the version resolved.
+// Accepting both is the difference between this working and failing silently.
+const _embedded = require('embedded-postgres');
+const EmbeddedPostgres = _embedded.default || _embedded;
 const { Client } = require('pg');
 
 const {
@@ -30,6 +34,18 @@ function log(msg) {
   const line = `${new Date().toISOString()} ${msg}\n`;
   fs.appendFileSync(LOG_FILE, line);
 }
+
+// The daemon is spawned detached with stdio ignored, so anything thrown outside
+// main()'s catch — while constructing the Postgres wrapper, for instance —
+// would otherwise kill it without leaving a single line anywhere.
+process.on('uncaughtException', (err) => {
+  log(`FATAL (uncaught): ${err.stack || err}`);
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  log(`FATAL (unhandled rejection): ${(err && err.stack) || err}`);
+  process.exit(1);
+});
 
 const pg = new EmbeddedPostgres({
   databaseDir: DATA_DIR,

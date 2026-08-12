@@ -26,25 +26,62 @@ talks to a single origin. Node is needed to *build* the UI, not to run it.
 Without Node the server still starts, but it falls back to the older single-file
 UI in `src/dsoa/api/static/`. You want Node.
 
+Runs on macOS, Linux and Windows. The application code is platform-neutral —
+what differs is only how you invoke the tasks.
+
+### Two ways to run every command
+
+The `npm run …` tasks are thin bash wrappers. Every step below is given both
+ways, so pick a column and stay in it:
+
+- **With bash** — macOS, Linux, WSL, or Windows with Git Bash on `PATH` (run
+  `bash --version` to check; Git for Windows ships one).
+- **Without bash** — the underlying commands, straight into PowerShell or `cmd`.
+
+The only difference between the columns is the path separator and the venv
+layout: POSIX venvs put executables in `.venv/bin`, Windows in `.venv\Scripts`.
+
 ---
 
 ## Step 1: Install
+
+**With bash**
 
 ```bash
 cd data-source-onboarding-agent
 ./bin/install.sh
 ```
 
-This creates a virtual environment (`.venv`), installs the Python dependencies,
-installs the front-end dependencies, and builds `frontend/dist`. Re-run it any
-time; it is safe to repeat.
+**Without bash** (PowerShell)
+
+```powershell
+cd data-source-onboarding-agent
+python -m venv .venv
+.venv\Scripts\python -m pip install --upgrade pip
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -e .
+npm --prefix frontend install
+npm --prefix frontend run build
+```
+
+Either way you end up with a virtual environment (`.venv`), the Python
+dependencies, the front-end dependencies, and a built `frontend/dist`. Both are
+safe to repeat.
 
 ---
 
 ## Step 2: Configure environment variables
 
+**With bash**
+
 ```bash
 cp .env.example .env
+```
+
+**Without bash** (PowerShell)
+
+```powershell
+Copy-Item .env.example .env
 ```
 
 Then add a key for whichever model you want. The backend accepts Anthropic,
@@ -71,19 +108,40 @@ practise what it generates.
 
 ## Step 3: Run it
 
+**With bash**
+
 ```bash
-npm run serve
+npm run serve                 # PORT=8002 npm run serve  to change the port
 ```
 
 Loads `.env`, builds the front end if it has not been built, and starts the API.
-Open **http://localhost:8001**.
 
-Override the port with `PORT=8002 npm run serve`.
+**Without bash** (PowerShell)
+
+```powershell
+npm --prefix frontend run build          # once, or after any UI change
+.venv\Scripts\python -m uvicorn dsoa.api.main:app --port 8001 --env-file .env
+```
+
+Either way, open **http://localhost:8001**.
 
 ### Working on the front end
 
+**With bash**
+
 ```bash
-npm run dev
+npm run dev                   # API_PORT=8002 npm run dev  to change the API port
+```
+
+**Without bash** — two terminals, because the wrapper is what normally
+supervises both:
+
+```powershell
+# terminal 1
+.venv\Scripts\python -m uvicorn dsoa.api.main:app --port 8001 --reload --env-file .env
+
+# terminal 2
+npm --prefix frontend run dev
 ```
 
 Two processes: Vite with hot reload, and uvicorn for the API.
@@ -100,24 +158,41 @@ Stopping the script stops both. Override the API port with `API_PORT=8002 npm ru
 > Use the hostname `localhost:5173`, not `127.0.0.1:5173` — Vite binds to the
 > IPv6 loopback, so the IPv4 address will refuse the connection.
 
-### Driving uvicorn yourself
+### Every task, both ways
 
-Build the UI once, then run whatever command you like:
+`npm run …` needs bash. The right-hand column is what it runs, and works
+anywhere Node and Python do. On macOS and Linux, swap `.venv\Scripts\` for
+`.venv/bin/`.
 
-```bash
-npm run ui:build
-./.venv/bin/python -m uvicorn dsoa.api.main:app --port 8001 --env-file .env
-```
+| task | with bash | without bash |
+| --- | --- | --- |
+| install | `./bin/install.sh` | see Step 1 |
+| serve | `npm run serve` | `.venv\Scripts\python -m uvicorn dsoa.api.main:app --port 8001 --env-file .env` |
+| dev | `npm run dev` | uvicorn `--reload` + `npm --prefix frontend run dev` |
+| build the UI | `npm run ui:build` | `npm --prefix frontend run build` |
+| install UI deps | `npm run ui:install` | `npm --prefix frontend install` |
+| typecheck the UI | `npm run ui:typecheck` | `npm --prefix frontend run typecheck` |
+| tests | `npm test` | `.venv\Scripts\python -m pytest tests/` |
+| lint | `npm run lint` | `.venv\Scripts\ruff check src tests eval scripts` |
+| database up / down | `npm run up` / `npm run down` | `node bin/pg.js up` / `node bin/pg.js down` |
+| database status / logs | `npm run status` / `npm run logs` | `node bin/pg.js status` / `node bin/pg.js logs` |
 
-### All front-end tasks
+The database tasks are already plain Node, so they behave identically on every
+platform.
 
-| command | what it does |
-| --- | --- |
-| `npm run serve` | build the UI, serve everything from one port |
-| `npm run dev` | hot-reloading UI + API |
-| `npm run ui:build` | build `frontend/dist` only |
-| `npm run ui:install` | install front-end dependencies |
-| `npm run ui:typecheck` | `tsc --noEmit` over the React app |
+### What genuinely differs on Windows
+
+Two behaviours, not setup steps — worth knowing rather than discovering:
+
+- **The connection sandbox is a weaker box.** Windows has no `rlimit` and no
+  `preexec_fn`, so the memory and CPU caps do not apply; the wall-clock timeout
+  and the scrubbed environment are the whole of the isolation. The child still
+  runs in its own process group, so a timeout takes its descendants with it.
+  Same code path everywhere, different strength — stated plainly at the top of
+  `src/dsoa/sandbox/runner.py`.
+- **The sandbox environment is slightly wider.** A child interpreter on Windows
+  will not start without `SYSTEMROOT` and friends, so those are added to the
+  allowlist. Secrets are still excluded, and a test asserts it.
 
 ---
 
@@ -126,9 +201,13 @@ npm run ui:build
 To generate a connector and then actually connect it to something real:
 
 ```bash
-npm install     # root task-runner dependencies (only needed for the database)
-npm run up      # downloads and runs Postgres as a local process — no Docker
+npm install              # root task-runner dependencies, once
+npm run up               # or: node bin/pg.js up
 ```
+
+`bin/pg.js` is plain Node, so `node bin/pg.js up` works identically without
+bash. It downloads a real Postgres binary the first time and runs it as an
+ordinary background process — no Docker, no service install, no admin rights.
 
 Seeded on `localhost:55432`, database `dsoa_source`, user `dsoa`, password
 `dsoa_local_dev`. Stop it with `npm run down`, wipe and reseed with `npm run reset`.
@@ -145,11 +224,25 @@ database"), generate the connector, open the **Connection** tab, enter `dsoa` /
 
 ## Verifying the setup
 
+**With bash**
+
 ```bash
-npm test                # 280 tests
-npm run ui:typecheck    # front end typechecks clean
+npm test                 # 294 tests
+npm run ui:typecheck
 curl localhost:8001/api/health
 ```
+
+**Without bash** (PowerShell)
+
+```powershell
+.venv\Scripts\python -m pytest tests/
+npm --prefix frontend run typecheck
+Invoke-RestMethod http://localhost:8001/api/health
+```
+
+`tests/test_portability.py` is the part that matters here: it asserts the
+cross-platform invariants — guarded imports, explicit UTF-8, platform-correct
+subprocess arguments — so a change that only breaks Windows fails on macOS too.
 
 A healthy server answers:
 

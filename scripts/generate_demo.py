@@ -155,7 +155,7 @@ def main() -> int:
         out = Path(args.write)
         out.mkdir(parents=True, exist_ok=True)
         path = out / result.module_name
-        path.write_text(result.code)
+        path.write_text(result.code, encoding="utf-8")
         print(f"\n  {DIM}written to {path}{RESET}")
 
     _rule("Verdict")

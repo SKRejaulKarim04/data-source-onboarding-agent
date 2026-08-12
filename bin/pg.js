@@ -58,7 +58,35 @@ async function up() {
 
   console.log('Waiting for Postgres...');
   await waitForPort(PORT, 30000);
-  console.log(`Ready on localhost:${PORT}`);
+
+  // A port that answers is not proof that *our* daemon answered it. A Docker
+  // container or a system Postgres on the same port looks identical from here,
+  // and reporting "Ready" in that case sends you off debugging the wrong
+  // database. Wait for the daemon to claim the pid file before believing it.
+  const started = await waitForDaemon(10000);
+  if (started) {
+    console.log(`Ready on localhost:${PORT} (pid ${started})`);
+    return;
+  }
+
+  console.error(
+    `\nPort ${PORT} is answering, but the embedded daemon did not start.\n` +
+      `Something else is already listening there — check \`docker ps\` — or read\n` +
+      `${LOG_FILE} for why the daemon exited.`
+  );
+  process.exitCode = 1;
+}
+
+function waitForDaemon(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve) => {
+    (function attempt() {
+      const pid = isRunning();
+      if (pid) return resolve(pid);
+      if (Date.now() > deadline) return resolve(false);
+      setTimeout(attempt, 250);
+    })();
+  });
 }
 
 async function down() {
