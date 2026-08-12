@@ -11,6 +11,7 @@ might open the file, which matters more here than typographic preference.
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 try:
@@ -21,17 +22,20 @@ except ModuleNotFoundError as exc:  # pragma: no cover - a tooling dependency
     ) from exc
 
 from pptx.dml.color import RGBColor
-from pptx.enum.text import MSO_ANCHOR
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.oxml.xmlchemy import OxmlElement
+from pptx.shapes.base import BaseShape
 from pptx.slide import Slide
 from pptx.table import _Cell
 from pptx.text.text import TextFrame
 from pptx.util import Emu, Inches, Length, Pt
 
 Stat = tuple[str, str, RGBColor]
-Stage = tuple[str, str, str, RGBColor]
 Item = str | tuple[str, str]
+#: endpoint, name, class, method, output, model-cost, colour, is-called
+ArchStage = tuple[str, str, str, str, str, str, RGBColor, bool]
 
 # --- Palette, taken from the application's own tokens ------------------------
 
@@ -262,34 +266,173 @@ def stat_slide(
         para(ff, footer, size=15, color=DIM, first=True)
 
 
-def pipeline_slide(
-    prs: Presentation, eyebrow_text: str, title: str, stages: list[Stage], footer: str
+def _arrowhead(
+    shape: BaseShape, colour: RGBColor, width_pt: float = 1.5, dash: bool = False
 ) -> None:
+    """Stroke a line and put a triangular head on its end.
+
+    python-pptx exposes line colour and width but not arrowheads, so the
+    `a:tailEnd` element is written into the line properties directly.
+    """
+    line = shape.line
+    line.color.rgb = colour
+    line.width = Pt(width_pt)
+    ln = line._get_or_add_ln()
+    if dash:
+        dash_el = OxmlElement("a:prstDash")
+        dash_el.set("val", "dash")
+        ln.append(dash_el)
+    tail = OxmlElement("a:tailEnd")
+    tail.set("type", "triangle")
+    tail.set("w", "med")
+    tail.set("len", "med")
+    ln.append(tail)
+
+
+def arrow(slide: Slide, x1: Length, y1: Length, x2: Length, y2: Length, colour: RGBColor) -> None:
+    """A straight connector with an arrowhead at the far end."""
+    conn = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, x1, y1, x2, y2)
+    _arrowhead(conn, colour)
+
+
+def dotted_drop(slide: Slide, x: Length, y1: Length, y2: Length) -> None:
+    """A faint vertical tie between a stage and the band below it."""
+    conn = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, x, y1, x, y2)
+    conn.line.color.rgb = RULE
+    conn.line.width = Pt(1.0)
+    dash = OxmlElement("a:prstDash")
+    dash.set("val", "sysDot")
+    conn.line._get_or_add_ln().append(dash)
+
+
+def loop_arrow(slide: Slide, left: Length, right: Length, top: Length, rise: Length) -> None:
+    """The self-loop drawn over a stage that repeats.
+
+    A semicircle sampled into line segments. PowerPoint's arc primitive takes no
+    arrowhead without more XML than the shape is worth, and a four-segment
+    approximation reads as a rendering glitch rather than a loop.
+    """
+    steps = 24
+    centre = (left + right) / 2
+    radius_x = (right - left) * 0.26
+    points = []
+    for step in range(1, steps + 1):
+        angle = math.pi * step / steps
+        points.append(
+            (
+                Emu(int(centre + radius_x * math.cos(angle))),
+                Emu(int(top - rise * math.sin(angle))),
+            )
+        )
+    builder = slide.shapes.build_freeform(Emu(int(centre + radius_x)), top)
+    builder.add_line_segments(points, close=False)
+    shape = builder.convert_to_shape()
+    shape.fill.background()
+    _arrowhead(shape, DIM, width_pt=1.25)
+
+
+def pill(
+    slide: Slide,
+    left: Length,
+    top: Length,
+    width: Length,
+    height: Length,
+    text: str,
+    colour: RGBColor,
+    *,
+    dashed: bool = False,
+) -> None:
+    box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
+    box.adjustments[0] = 0.18
+    box.fill.background()
+    box.line.color.rgb = colour
+    box.line.width = Pt(1.5 if not dashed else 1.0)
+    box.shadow.inherit = False
+    if dashed:
+        dash = OxmlElement("a:prstDash")
+        dash.set("val", "dash")
+        box.line._get_or_add_ln().append(dash)
+    frame = box.text_frame
+    frame.word_wrap = True
+    frame.margin_left = frame.margin_right = 0
+    para(frame, text, size=12, color=colour, bold=not dashed, first=True)
+    frame.paragraphs[0].alignment = PP_ALIGN.CENTER
+    box.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+
+
+def architecture_slide(
+    prs: Presentation, eyebrow_text: str, title: str, stages: list[ArchStage], footer: str
+) -> None:
+    """The pipeline drawn end to end: endpoint, stage, output, and model cost."""
     slide = blank(prs)
     eyebrow(slide, eyebrow_text)
-    heading(slide, title)
-    rule(slide, Inches(1.85))
+    heading(slide, title, size=28)
 
     n = len(stages)
-    gap = Inches(0.22)
+    gap = Inches(0.2)
     total = Inches(11.8)
     width = Emu(int((total - gap * (n - 1)) / n))
-    for i, (name, detail, tag, colour) in enumerate(stages):
-        left = Emu(int(MARGIN + i * (width + gap)))
-        card(slide, left, Inches(2.4), width, Inches(2.25), accent=colour if tag else None)
-        inner = Emu(int(width - Inches(0.4)))
-        nf = textbox(slide, Emu(int(left + Inches(0.2))), Inches(2.62), inner, Inches(0.5))
-        para(nf, f"{i + 1}", size=12, color=colour, bold=True, font=MONO, first=True)
-        tf = textbox(slide, Emu(int(left + Inches(0.2))), Inches(3.0), inner, Inches(0.5))
-        para(tf, name, size=16, color=TEXT, bold=True, first=True)
-        df = textbox(slide, Emu(int(left + Inches(0.2))), Inches(3.45), inner, Inches(1.0))
-        para(df, detail, size=11, color=DIM, font=MONO, first=True)
-        if tag:
-            gf = textbox(slide, Emu(int(left + Inches(0.2))), Inches(4.22), inner, Inches(0.3))
-            para(gf, tag, size=9.5, color=colour, bold=True, font=MONO, first=True)
+    box_top, box_h = Inches(2.46), Inches(1.28)
+    mid = Emu(int(box_top + box_h / 2))
 
-    ff = textbox(slide, MARGIN, Inches(5.15), Inches(11.8), Inches(1.6))
-    para(ff, footer, size=15, color=DIM, first=True)
+    for i, (endpoint, name, cls, method, output, cost, colour, always) in enumerate(stages):
+        left = Emu(int(MARGIN + i * (width + gap)))
+        centre = Emu(int(left + width / 2))
+        inner = Emu(int(width - Inches(0.24)))
+        pad = Emu(int(left + Inches(0.12)))
+
+        ef = textbox(slide, pad, Inches(2.02), inner, Inches(0.3))
+        para(ef, endpoint, size=10.5, color=MUTED, font=MONO, first=True)
+
+        card(slide, left, box_top, width, box_h)
+        nf = textbox(slide, pad, Inches(2.60), inner, Inches(0.34))
+        para(nf, name, size=17, color=TEXT, bold=True, first=True)
+        nf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        cf = textbox(slide, pad, Inches(3.00), inner, Inches(0.6))
+        para(cf, cls, size=10.5, color=DIM, font=MONO, first=True)
+        cf.paragraphs[0].alignment = PP_ALIGN.CENTER
+        para(cf, method, size=10.5, color=DIM, font=MONO, space_after=0)
+        cf.paragraphs[1].alignment = PP_ALIGN.CENTER
+
+        of = textbox(slide, pad, Inches(3.88), inner, Inches(0.32))
+        para(of, output, size=10.5, color=MUTED, font=MONO, first=True)
+        of.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+        if i < n - 1:
+            arrow(
+                slide,
+                Emu(int(left + width + Inches(0.02))),
+                mid,
+                Emu(int(left + width + gap - Inches(0.02))),
+                mid,
+                DIM,
+            )
+
+        dotted_drop(slide, centre, Inches(4.26), Inches(5.00))
+        pill(
+            slide,
+            left,
+            Inches(5.00),
+            width,
+            Inches(0.62),
+            cost,
+            colour if always else MUTED,
+            dashed=not always,
+        )
+
+    # Refine repeats until the draft has no open questions.
+    refine_left = Emu(int(MARGIN + (width + gap)))
+    loop_arrow(slide, refine_left, Emu(int(refine_left + width)), box_top, Inches(0.30))
+    lf = textbox(slide, Emu(int(refine_left - Inches(0.6))), Inches(1.58), Inches(3.3), Inches(0.3))
+    para(lf, "until no questions remain", size=10.5, color=DIM, first=True)
+    lf.paragraphs[0].alignment = PP_ALIGN.CENTER
+
+    rule(slide, Inches(4.64))
+    bf = textbox(slide, MARGIN, Inches(4.71), Inches(6.0), Inches(0.3))
+    para(bf, "WHERE THE MODEL IS CALLED", size=10.5, color=MUTED, font=MONO, first=True)
+
+    ff = textbox(slide, MARGIN, Inches(5.94), Inches(11.8), Inches(1.0))
+    para(ff, footer, size=13.5, color=DIM, first=True)
 
 
 def table_slide(
@@ -410,6 +553,79 @@ def build(shots: Path, out: Path) -> Path:
         "than remembered.",
     )
 
+    table_slide(
+        prs,
+        "Business objective",
+        "Where the work actually moves",
+        ["Step in onboarding", "Today", "With the agent"],
+        [
+            [
+                "Capture the requirement",
+                "A ticket, then a clarifying thread over days",
+                "Plain English, questions answered in the same session",
+            ],
+            [
+                "Write the connector",
+                "Hand-written per source, per engineer",
+                "Rendered from a reviewed spec, identical every time",
+            ],
+            [
+                "Enforce the standards",
+                "Code review, after the code exists",
+                "13 machine checks, before it can be accepted",
+            ],
+            [
+                "Prove it connects",
+                "Run it locally and hope the target matches",
+                "Sandboxed test against the real database, recorded",
+            ],
+            [
+                "Write the docs",
+                "Written last, when enthusiasm is lowest",
+                "Generated with the code, never out of date",
+            ],
+            [
+                "Answer \u201cwhy is this in production?\u201d",
+                "Ask whoever wrote it, if they still work here",
+                "A manifest chaining request → spec → template → checksum",
+            ],
+        ],
+        note="The engineer stops writing the same five methods and starts reviewing a diff.",
+    )
+
+    bullets_slide(
+        prs,
+        "Business objective",
+        "What each stakeholder gets",
+        [
+            (
+                "The team requesting the source",
+                "Self-service. They describe what they need in their own words instead of "
+                "writing a ticket and waiting in a queue — and they find out in the same "
+                "session if their request is missing something.",
+            ),
+            (
+                "Data engineering",
+                "The repetitive half of the job disappears; the judgement half remains. "
+                "Reviewing a generated connector against a spec is faster and more reliable "
+                "than writing one from scratch, and the review is about fit, not style.",
+            ),
+            (
+                "Security and compliance",
+                "Credentials cannot reach the code — two checks make that a rejection rather "
+                "than a review comment. Read-only is the default. Every artifact records which "
+                "environment variables it needs, by name only.",
+            ),
+            (
+                "Platform and audit",
+                "Every connector in production is traceable to the sentence that requested it, "
+                "the template version that rendered it, and the checksum of exactly what shipped. "
+                "That turns a six-month-later question into a lookup.",
+            ),
+        ],
+        note="Adding a new SQL dialect is a config entry, not a project.",
+    )
+
     bullets_slide(
         prs,
         "The core idea",
@@ -437,20 +653,64 @@ def build(shots: Path, out: Path) -> Path:
         note="This is the single design decision the rest of the project follows from.",
     )
 
-    pipeline_slide(
+    architecture_slide(
         prs,
         "Architecture",
         "One request, five stages",
         [
-            ("Extract", "SpecExtractor\n.extract()", "1 model call", ACCENT),
-            ("Refine", "SpecExtractor\n.refine()", "no model call", GREEN),
-            ("Generate", "ConnectorGenerator\n.generate()", "model on repair", AMBER),
-            ("Test", "ConnectionSandbox\n.run()", "subprocess", AMBER),
-            ("Deliver", "Artifact\n.to_zip()", "deterministic", GREEN),
+            (
+                "POST /api/requests",
+                "Extract",
+                "SpecExtractor",
+                ".extract()",
+                "SpecDraft + questions",
+                "always — 1 call",
+                ACCENT,
+                True,
+            ),
+            (
+                "POST …/answers",
+                "Refine",
+                "SpecExtractor",
+                ".refine()",
+                "SpecDraft (complete)",
+                "never",
+                GREEN,
+                False,
+            ),
+            (
+                "POST …/generate",
+                "Generate",
+                "ConnectorGenerator",
+                ".generate()",
+                "GeneratedConnector",
+                "only on failure / docs",
+                ACCENT,
+                True,
+            ),
+            (
+                "POST …/test",
+                "Test",
+                "ConnectionSandbox",
+                ".run()",
+                "SandboxResult",
+                "only on failure",
+                ACCENT,
+                True,
+            ),
+            (
+                "GET …/download",
+                "Deliver",
+                "Artifact",
+                ".to_zip()",
+                "bytes",
+                "never",
+                GREEN,
+                False,
+            ),
         ],
-        footer="Only three stages can call the model, and two of those only when something has "
-        "already failed. Answering a clarifying question is pure arithmetic — the answers map "
-        "onto known fields, so a second extraction can never re-misread what you already settled.",
+        footer="Answering a clarifying question is deterministic — the answers map onto known "
+        "fields, so no second extraction can misread what you already settled.",
     )
 
     # --- The working product -------------------------------------------------
