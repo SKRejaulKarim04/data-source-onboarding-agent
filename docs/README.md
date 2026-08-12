@@ -1,8 +1,12 @@
 # Deck & assets
 
-**[Data-Source-Onboarding-Agent.pptx](Data-Source-Onboarding-Agent.pptx)** — 19 slides,
-16:9: the business case, architecture, technology, design decisions, an honest list
-of what is not built, and screenshots of every section of the working app.
+**[Data-Source-Onboarding-Agent.pptx](Data-Source-Onboarding-Agent.pptx)** — 11 slides,
+16:9: the business case, the design guarantee, the pipeline architecture, the stack,
+and screenshots of every section of the working app.
+
+Deliberately short. The deeper material lives in [DESIGN_NOTES.md](../DESIGN_NOTES.md)
+(decisions, trade-offs, what is not built) and [WORKFLOW.md](../WORKFLOW.md)
+(the execution map) rather than in slides nobody reaches.
 
 Rebuild it after a UI change:
 

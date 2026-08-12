@@ -442,15 +442,23 @@ def table_slide(
     headers: list[str],
     rows: list[list[str]],
     *,
+    standfirst: str | None = None,
     note: str | None = None,
 ) -> None:
     slide = blank(prs)
     eyebrow(slide, eyebrow_text)
-    heading(slide, title)
-    rule(slide, Inches(1.85))
+    heading(slide, title, size=27)
+
+    top = Inches(2.2)
+    if standfirst:
+        sf = textbox(slide, MARGIN, Inches(1.62), Inches(11.2), Inches(0.8))
+        para(sf, standfirst, size=15, color=DIM, first=True)
+        top = Inches(2.46)
+    else:
+        rule(slide, Inches(1.85))
 
     shape = slide.shapes.add_table(
-        len(rows) + 1, len(headers), MARGIN, Inches(2.2), Inches(11.8), Inches(0.4)
+        len(rows) + 1, len(headers), MARGIN, top, Inches(11.8), Inches(0.4)
     )
     table = shape.table
     for c, text in enumerate(headers):
@@ -511,68 +519,32 @@ def build(shots: Path, out: Path) -> Path:
         prs,
         "Data Source Onboarding Agent",
         "Plain English in. A validated, standards-compliant, versioned Python connector out.",
-        "Natural language → spec → generated code → machine-checked → proven against a live "
-        "database",
+        "natural language → spec → generated code → machine-checked → proven against "
+        "a live database",
     )
 
-    bullets_slide(
-        prs,
-        "Business objective",
-        "Onboarding a data source is slow, and the cost is repetition",
-        [
-            (
-                "Every new source is hand-written work",
-                "A data engineer writes connection handling, retries, schema introspection and "
-                "docs"
-                "again — the same five methods, slightly differently each time.",
-            ),
-            (
-                "Consistency decays with headcount",
-                "Ten engineers produce ten interpretations of 'read-only' and 'secrets from the "
-                "environment'. Review catches some of it, some of the time.",
-            ),
-            (
-                "The standards are real, and unevenly applied",
-                "No hardcoded credentials, no dynamic SQL, typed, documented. Everyone agrees; "
-                "nothing enforces it until code review, which is a person having a bad afternoon.",
-            ),
-        ],
-    )
-
-    stat_slide(
-        prs,
-        "Business objective",
-        "What this changes",
-        [
-            ("Minutes", "from request to reviewed connector, instead of days", GREEN),
-            ("100%", "of generated connectors meet all 13 standards, or are rejected", ACCENT),
-            ("Every artifact", "traceable to the request that produced it", AMBER),
-        ],
-        footer="The goal is not to remove the engineer. It is to remove the part of the "
-        "job that is identical every time, and to make the standards structural rather "
-        "than remembered.",
-    )
+    # --- 2. Business case, in one slide --------------------------------------
 
     table_slide(
         prs,
         "Business objective",
-        "Where the work actually moves",
+        "The repetition is where the risk lives",
         ["Step in onboarding", "Today", "With the agent"],
         [
             [
                 "Capture the requirement",
                 "A ticket, then a clarifying thread over days",
-                "Plain English, questions answered in the same session",
+                "Plain English; the gaps are asked about in the same session",
             ],
             [
                 "Write the connector",
                 "Hand-written per source, per engineer",
-                "Rendered from a reviewed spec, identical every time",
+                "Rendered from a reviewed spec — identical every time",
             ],
             [
                 "Enforce the standards",
-                "Code review, after the code exists",
-                "13 machine checks, before it can be accepted",
+                "Code review, after the code already exists",
+                "13 machine checks, before it can be accepted at all",
             ],
             [
                 "Prove it connects",
@@ -580,78 +552,57 @@ def build(shots: Path, out: Path) -> Path:
                 "Sandboxed test against the real database, recorded",
             ],
             [
-                "Write the docs",
-                "Written last, when enthusiasm is lowest",
-                "Generated with the code, never out of date",
-            ],
-            [
-                "Answer \u201cwhy is this in production?\u201d",
+                "Answer “why is this in production?”",
                 "Ask whoever wrote it, if they still work here",
                 "A manifest chaining request → spec → template → checksum",
             ],
         ],
-        note="The engineer stops writing the same five methods and starts reviewing a diff.",
+        standfirst="The cost is not writing one connector — it is writing the fortieth, where the "
+        "same five methods get re-derived slightly differently and the standards hold only as "
+        "well as the reviewer's attention that afternoon.",
+        note="Requesting team: self-service · Engineering: reviews a diff, not a blank file · "
+        "Security: credentials structurally excluded · Audit: every artifact traceable",
     )
 
-    bullets_slide(
-        prs,
-        "Business objective",
-        "What each stakeholder gets",
-        [
-            (
-                "The team requesting the source",
-                "Self-service. They describe what they need in their own words instead of "
-                "writing a ticket and waiting in a queue — and they find out in the same "
-                "session if their request is missing something.",
-            ),
-            (
-                "Data engineering",
-                "The repetitive half of the job disappears; the judgement half remains. "
-                "Reviewing a generated connector against a spec is faster and more reliable "
-                "than writing one from scratch, and the review is about fit, not style.",
-            ),
-            (
-                "Security and compliance",
-                "Credentials cannot reach the code — two checks make that a rejection rather "
-                "than a review comment. Read-only is the default. Every artifact records which "
-                "environment variables it needs, by name only.",
-            ),
-            (
-                "Platform and audit",
-                "Every connector in production is traceable to the sentence that requested it, "
-                "the template version that rendered it, and the checksum of exactly what shipped. "
-                "That turns a six-month-later question into a lookup.",
-            ),
-        ],
-        note="Adding a new SQL dialect is a config entry, not a project.",
-    )
+    # --- 3. The guarantee ----------------------------------------------------
 
     bullets_slide(
         prs,
         "The core idea",
-        "The tension — and how it is resolved",
+        "Reliability comes from constraint, not from prompting",
         [
             (
-                "The tension",
-                "Free-form English is unpredictable. Production code must be guaranteed. "
-                "Letting a language model write the connector puts an unreliable component in "
-                "the one place reliability is non-negotiable.",
+                "The model never writes the code",
+                "It fills a structured spec — schema-enforced, so it selects from closed sets "
+                "rather than inventing strings. A Jinja2 template renders the connector, "
+                "deterministically: same spec in, same bytes out.",
             ),
             (
-                "The resolution: the model never writes the code",
-                "It fills in a structured spec — schema-enforced, so it selects from closed sets "
-                "rather than inventing strings. A Jinja2 template renders the code, "
-                "deterministically. Same spec in, same bytes out.",
+                "13 machine checks decide what ships",
+                "no-hardcoded-credentials · no-dynamic-sql · env-for-secrets · "
+                "no-dangerous-calls · type-hints · docstrings, and seven more — read from the "
+                "parsed syntax tree, never "
+                "by importing the code, because importing runs it.",
             ),
             (
-                "Reliability comes from constraint, not from prompting",
-                "The model does what models are good at — reading intent from messy language. "
-                "The template does what templates are good at — producing exactly the same thing "
-                "every time.",
+                "Repair is bounded and cannot regress",
+                "At most three attempts, and a candidate is adopted only if it strictly "
+                "reduces the error count. A rejected connector is still returned, with its "
+                "findings, so a "
+                "reviewer can see exactly what went wrong.",
+            ),
+            (
+                "Secrets cannot reach the artifact",
+                "Credentials are scrubbed from the request before the model sees it, two checks "
+                "make a literal credential a rejection, and the manifest records the environment "
+                "variables by name only — never their values.",
             ),
         ],
-        note="This is the single design decision the rest of the project follows from.",
+        note="A checker that has only ever seen good input has demonstrated nothing — so the suite "
+        "injects faults on purpose.",
     )
+
+    # --- 4. Architecture -----------------------------------------------------
 
     architecture_slide(
         prs,
@@ -713,60 +664,7 @@ def build(shots: Path, out: Path) -> Path:
         "fields, so no second extraction can misread what you already settled.",
     )
 
-    # --- The working product -------------------------------------------------
-
-    image_slide(
-        prs,
-        "The product · 1 of 6",
-        "Describe the source in plain English",
-        shots / "01-welcome.png",
-        "No forms, no connection wizard. Three worked examples are built in for a cold start.",
-    )
-    image_slide(
-        prs,
-        "The product · 2 of 6",
-        "When the request is incomplete, the agent asks",
-        shots / "02-clarification.png",
-        "Host was never stated, so it is not invented. Confidence drops to 55%, the missing field "
-        "is"
-        "named, and the question carries an example — a templated question, not model-authored "
-        "prose.",
-    )
-    image_slide(
-        prs,
-        "The product · 3 of 6",
-        "Extraction, generation, and the standards gate",
-        shots / "04-standards.png",
-        "Everything the agent understood is shown for review — including what it assumed. "
-        "13 of 13 checks pass, so the artifact is accepted.",
-    )
-    image_slide(
-        prs,
-        "The product · 4 of 6",
-        "The generated connector",
-        shots / "05-code.png",
-        "Provenance above the code: template version, spec checksum, code checksum, repair count. "
-        "Written by a template, never by the model.",
-    )
-    image_slide(
-        prs,
-        "The product · 5 of 6",
-        "Proven against a real database, not just compiled",
-        shots / "06-connection.png",
-        "Executed in a sandboxed subprocess against live PostgreSQL. Three tables discovered with "
-        "their primary keys. Credentials are sent once and never stored, logged, or written to the "
-        "artifact.",
-    )
-    image_slide(
-        prs,
-        "The product · 6 of 6",
-        "The handover artifact",
-        shots / "07-artifact.png",
-        "Connector, README, requirements, explanation and a manifest — packaged as a versioned zip "
-        "with a checksum over the whole bundle.",
-    )
-
-    # --- How it is built -----------------------------------------------------
+    # --- 5. Technology -------------------------------------------------------
 
     table_slide(
         prs,
@@ -798,156 +696,55 @@ def build(shots: Path, out: Path) -> Path:
         note="No orchestration framework. The pipeline is six modules and a function call chain.",
     )
 
-    bullets_slide(
-        prs,
-        "Design · quality",
-        "What happens when generation goes wrong",
-        [
-            (
-                "13 AST checks, run on parsed source",
-                "no-hardcoded-credentials · no-dynamic-sql · env-for-secrets · no-dangerous-calls "
-                "·"
-                "type-hints · docstrings · and seven more. The code is never imported to be "
-                "checked.",
-            ),
-            (
-                "A bounded repair loop with a regression guard",
-                "At most three attempts, and a candidate is adopted only if it strictly reduces "
-                "the"
-                "error count. The returned code is never worse than the input.",
-            ),
-            (
-                "Rejection is a rendered outcome, not a crash",
-                "A failing connector still comes back, with its findings, so a reviewer can see "
-                "exactly what went wrong.",
-            ),
-            (
-                "The checker is tested against bad input",
-                "npm run generate:faults injects a hardcoded password, an eval(), an f-string SQL "
-                "query. A checker that has only seen good input has demonstrated nothing.",
-            ),
-        ],
-    )
-
-    bullets_slide(
-        prs,
-        "Design · security",
-        "Secrets never touch the artifact",
-        [
-            (
-                "Scrubbed at input",
-                "Credentials are redacted before the prompt reaches the model, and the stored "
-                "record holds the scrubbed copy — so a pasted password cannot resurface in a later "
-                "response.",
-            ),
-            (
-                "Structurally impossible in the output",
-                "Two AST checks make a literal credential a rejection rather than a review "
-                "comment.",
-            ),
-            (
-                "Names only in the manifest",
-                "The bundle records which environment variables are required, never their values.",
-            ),
-            (
-                "Transient at test time",
-                "The sandbox child gets an allowlisted environment — not a denylist, because a "
-                "denylist exposes every newly added secret until someone remembers to update it.",
-            ),
-        ],
-    )
+    # --- 6-11. The working product -------------------------------------------
 
     image_slide(
         prs,
-        "Design · provenance",
-        "Every artifact answers 'where did this come from?'",
-        shots / "08-manifest.png",
-        "Request → spec checksum → template version → code checksum → artifact version. "
-        "Packaging is byte-reproducible: the zip uses a fixed timestamp, not the clock.",
+        "The product · 1 of 6",
+        "Describe the source in plain English",
+        shots / "01-welcome.png",
+        "No forms, no connection wizard. Three worked examples are built in for a cold start.",
     )
-
-    bullets_slide(
+    image_slide(
         prs,
-        "Design · interface",
-        "Why the UI looks like a conversation",
-        [
-            (
-                "The interaction is a dialogue, so the interface is one",
-                "The agent asks when it is unsure. A form cannot do that; a thread can.",
-            ),
-            (
-                "Evidence sits beside the conversation, not inside it",
-                "Standards, code, connection and artifact live in a persistent right-hand panel, "
-                "so a reviewer can check the output without losing the thread.",
-            ),
-            (
-                "The server owns state; the thread is a log of how it was reached",
-                "Reopening a request replays it from stored state rather than a saved transcript — "
-                "the backend stores state, not conversation, and pretending otherwise would drift.",
-            ),
-        ],
-        note="React 18 + TypeScript · built to static files · served by the API process · no CORS "
-        "anywhere",
+        "The product · 2 of 6",
+        "When the request is incomplete, the agent asks",
+        shots / "02-clarification.png",
+        "Host was never stated, so it is not invented. Confidence drops to 55%, the missing field "
+        "is named, and the question carries an example.",
     )
-
-    table_slide(
+    image_slide(
         prs,
-        "Honest assessment",
-        "What is deliberately not built yet",
-        ["Gap", "Current state", "What it needs"],
-        [
-            ["Authentication", "None on the API", "Anyone reaching the port can generate and test"],
-            [
-                "Persistence",
-                "In-memory dict",
-                "Object storage keyed by code checksum + Postgres metadata",
-            ],
-            ["Audit trail", "Per-request activity log", "Who tested which target, durably"],
-            ["Egress control", "Unrestricted", "The same sandbox inside a container, allowlisted"],
-            ["Auth methods", "2 of 6 have templates", "OAuth2 needs token caching the shape lacks"],
-            ["Concurrency", "Single worker", "Falls out of the persistence work"],
-        ],
-        note="A design note that lists only strengths is a sales sheet.",
+        "The product · 3 of 6",
+        "Extraction, generation, and the standards gate",
+        shots / "04-standards.png",
+        "Everything the agent understood is shown for review — including what it assumed. "
+        "13 of 13 checks pass, so the artifact is accepted.",
     )
-
-    bullets_slide(
+    image_slide(
         prs,
-        "Roadmap",
-        "The next phase: generate MCP servers, not just connectors",
-        [
-            (
-                "Same sentence, second output target",
-                "Describe a database in English; receive a read-only MCP server that any AI client "
-                "can query — gated by the same standards pipeline.",
-            ),
-            (
-                "The architecture already fits",
-                "The registry is versioned and pluggable, the checks are a list, and the sandbox "
-                "already spawns a subprocess and parses structured JSON from its stdout — which is "
-                "most of what speaking MCP over stdio requires.",
-            ),
-            (
-                "It needs checks a connector does not",
-                "A tool's docstring is the description the model reads. An unbounded SELECT fills "
-                "a"
-                "context window rather than crashing. A query(sql) tool hands arbitrary SQL to a "
-                "model.",
-            ),
-        ],
-        note="Estimated 8–12 days, starting with a half-day spike that makes the rest refutable.",
+        "The product · 4 of 6",
+        "The generated connector",
+        shots / "05-code.png",
+        "Provenance above the code: template version, spec checksum, code checksum, repair count. "
+        "Written by a template, never by the model.",
     )
-
-    closing_slide(
+    image_slide(
         prs,
-        "The claim, in one line",
-        [
-            "The model reads intent. The template writes the code. The checker decides what ships.",
-            "",
-            "That separation is what turns a demo into something you could put in front of a "
-            "review board — and it is why the guarantee holds for the next connector, not just "
-            "this one.",
-        ],
-        "280 tests · 13 standards checks · 4 source types · 100% conformance on accepted artifacts",
+        "The product · 5 of 6",
+        "Proven against a real database, not just compiled",
+        shots / "06-connection.png",
+        "Executed in a sandboxed subprocess against live PostgreSQL. Three tables discovered with "
+        "their primary keys. Credentials are sent once and never stored, logged, or written to the "
+        "artifact.",
+    )
+    image_slide(
+        prs,
+        "The product · 6 of 6",
+        "The handover artifact",
+        shots / "07-artifact.png",
+        "Connector, README, requirements, explanation and a manifest, packaged as a versioned zip. "
+        "The model reads intent; the template writes the code; the checker decides what ships.",
     )
 
     out.parent.mkdir(parents=True, exist_ok=True)
