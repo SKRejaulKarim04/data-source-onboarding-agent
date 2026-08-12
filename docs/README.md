@@ -1,8 +1,9 @@
 # Deck & assets
 
-**[Data-Source-Onboarding-Agent.pptx](Data-Source-Onboarding-Agent.pptx)** — 11 slides,
+**[Data-Source-Onboarding-Agent.pptx](Data-Source-Onboarding-Agent.pptx)** — 12 slides,
 16:9: the business case, the design guarantee, the pipeline architecture, the stack,
-and screenshots of every section of the working app.
+screenshots of every section of the working app, and how each artifact stays
+explicable months later.
 
 Deliberately short. The deeper material lives in [DESIGN_NOTES.md](../DESIGN_NOTES.md)
 (decisions, trade-offs, what is not built) and [WORKFLOW.md](../WORKFLOW.md)
