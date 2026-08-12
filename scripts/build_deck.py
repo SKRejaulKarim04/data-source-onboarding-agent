@@ -691,7 +691,7 @@ def build(shots: Path, out: Path) -> Path:
                 "React 18 + TypeScript + Vite",
                 "Built to static files, served by the same process",
             ],
-            ["Tests", "pytest — 280 of them", "Including deliberate fault injection"],
+            ["Tests", "pytest — 294 of them", "Including deliberate fault injection"],
         ],
         note="No orchestration framework. The pipeline is six modules and a function call chain.",
     )
@@ -747,41 +747,41 @@ def build(shots: Path, out: Path) -> Path:
         "The model reads intent; the template writes the code; the checker decides what ships.",
     )
 
-    # --- 12. Longevity -------------------------------------------------------
+    # --- 12. Conclusion ------------------------------------------------------
 
     bullets_slide(
         prs,
-        "Longevity",
-        "Six months later, when someone asks why",
+        "Conclusion",
+        "Standards you can prove, not standards you hope for",
         [
             (
-                "Every artifact carries four independent identities",
-                "The template version that shaped it, a checksum of the request it came from, a "
-                "checksum of the exact bytes emitted, and a version whose patch number is the "
-                "repair count — so 1.0.2 reads as “template 1.0, needed two repair passes”, and a "
-                "connector that struggled is visible at a glance.",
+                "It works end to end, today",
+                "Plain English to a spec, a spec to a rendered connector, thirteen machine checks, "
+                "a live connection test against a real PostgreSQL, and a versioned bundle you can "
+                "hand over. Every screenshot in this deck is that pipeline running — none of it "
+                "is a mockup.",
             ),
             (
-                "Packaging is byte-reproducible",
-                "The bundle is written with a fixed timestamp rather than the clock, so building "
-                "the same artifact twice produces identical bytes. “Is this the file we shipped?” "
-                "becomes a comparison instead of a memory.",
+                "The guarantee is structural, not aspirational",
+                "The model fills a form; a template writes the code; a checker decides what ships. "
+                "That separation is why the promise holds for the fortieth connector and not just "
+                "the one being demonstrated.",
             ),
             (
-                "The parts that change most often are data, not code",
-                "Source types are generated from a JSON file at import — one entry brings the "
-                "dialect profile, the clarifying-question options and the registry key with it. "
-                "Adding a fourteenth standards check is one function and one list entry.",
+                "Every artifact can account for itself",
+                "Template version, spec checksum, code checksum, and a repair count carried in the "
+                "version number — packaged byte-reproducibly. Six months on, “why is this in "
+                "production?” is a lookup rather than an argument.",
             ),
             (
-                "Where that stops being true, it is written down",
-                "Oracle is a config change; Snowflake needs a new authentication method as well, "
-                "because key-pair and SSO do not fit the username/password shape. Saying which is "
-                "which is more useful than claiming both are easy.",
+                "It runs where the team runs",
+                "macOS, Linux and Windows, with the cross-platform invariants asserted by the test "
+                "suite rather than assumed — so a change that would only break one of them fails "
+                "on all of them.",
             ),
         ],
-        note="None of this depends on someone remembering to fill it in — provenance is recorded "
-        "by the pipeline that produces the artifact.",
+        note="294 tests · 13 standards checks · 4 source types · "
+        "100% conformance on accepted artifacts",
     )
 
     out.parent.mkdir(parents=True, exist_ok=True)
