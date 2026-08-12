@@ -20,7 +20,7 @@ cp .env.example .env
 set -a && . ./.env && set +a      # export the DSOA_PG_* variables
 
 npm run up                        # start + seed Postgres on localhost:55432 (no Docker needed)
-npm test                          # 280 tests
+npm test                          # 294 tests
 npm run smoke                     # Phase 1: live connector proof
 npm run demo                      # Phase 2: extraction walkthrough
 npm run generate                  # generation + standards checklist
@@ -126,7 +126,7 @@ That plan has a prerequisite: the templates must render toward something. `src/d
 │   ├── golden_prompts.yaml         30 cases: clean, incomplete, ambiguous, adversarial
 │   └── runner.py                   field accuracy, hallucination rate, recall
 │
-├── tests/                          280 tests
+├── tests/                          294 tests
 └── scripts/
     ├── smoke_test.py               Phase 1 gate
     ├── extract_demo.py             Phase 2 walkthrough
