@@ -168,6 +168,10 @@
 > *What it is:* When Python reads code, before it runs it, it breaks the text down into a tree of logical components (like variables, loops, and function calls). This is the AST.
 > *Why we use it:* By scanning the AST, we can detect if a password is hardcoded or if an `eval()` function is used, *without actually running the code*. Running untrusted code is dangerous; reading its AST is safe.
 > 
+> **BaseConnector**
+> *What it is:* An Abstract Base Class (ABC) in Python that acts as a blueprint. It mandates that every connector must have standard methods like `connect()`, `test_connection()`, and `read_data()`.
+> *Why we use it:* It ensures architectural consistency. Our AST checks verify that the generated code inherits from `BaseConnector`. This guarantees that downstream applications can interact with *any* generated connector using the exact same API, regardless of whether it connects to Postgres or a REST API.
+> 
 > **Deterministic vs. Probabilistic**
 > *What it is:* A **deterministic** system (like our Jinja2 templates) will give you the exact same output every single time you give it the same input. A **probabilistic** system (like an LLM generating code) might give you a slightly different answer every time you ask the exact same question.
 > *Why we care:* Enterprise standards require deterministic output. You can't have a connector script that changes its indentation or variable names randomly.
