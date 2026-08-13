@@ -117,3 +117,34 @@
 > * **What it is:** The official SDKs for Claude and Gemini foundation models.
 > * **Why:** We needed state-of-the-art reasoning for natural language extraction.
 > * **How:** We strictly use structured tool calling (`complete_json`). The LLMs are never asked to output free-form text unless they are writing the explanation document. Their sole job is to populate the strict JSON schemas we define, and we use a temperature of 0 to minimize hallucinations.
+
+
+---
+
+
+# Technical Glossary (For Q&A / Evaluator Clarifications)
+*Use these cheat-sheet definitions if an evaluator asks you to clarify a term.*
+
+> **AST (Abstract Syntax Tree)**
+> *What it is:* When Python reads code, before it runs it, it breaks the text down into a tree of logical components (like variables, loops, and function calls). This is the AST.
+> *Why we use it:* By scanning the AST, we can detect if a password is hardcoded or if an `eval()` function is used, *without actually running the code*. Running untrusted code is dangerous; reading its AST is safe.
+> 
+> **Deterministic vs. Probabilistic**
+> *What it is:* A **deterministic** system (like our Jinja2 templates) will give you the exact same output every single time you give it the same input. A **probabilistic** system (like an LLM generating code) might give you a slightly different answer every time you ask the exact same question.
+> *Why we care:* Enterprise standards require deterministic output. You can't have a connector script that changes its indentation or variable names randomly.
+>
+> **Defense-in-Depth**
+> *What it is:* A security concept where you use multiple, overlapping layers of protection. If one layer fails, the next layer catches the threat.
+> *Why we use it:* We trust our Jinja2 templates, but if a developer accidentally introduces a flaw into the template, or if the LLM sneaks code into a JSON field (Spec Injection), the 13 AST checks act as the second layer of defense to block it before execution.
+>
+> **I/O Bound / Asynchronous (async/await)**
+> *What it is:* I/O Bound means an application spends most of its time waiting for input/output (like waiting for the database to connect, or waiting 5 seconds for the Claude API to respond). Asynchronous programming (`async/await`) allows the server to handle other users' requests while waiting, instead of freezing.
+> *Why we use it:* This is why we chose FastAPI and Uvicorn over older, synchronous frameworks like Flask.
+>
+> **Pydantic (Strict Data Validation)**
+> *What it is:* A library that enforces strict rules on data. If we tell Pydantic "this field must be an integer", and the LLM passes the string "five", Pydantic instantly throws an error.
+> *Why we use it:* It stops hallucinated or improperly formatted data from the LLM from poisoning our application logic.
+>
+> **Regression Guard**
+> *What it is:* A strict rule in our Repair Loop. When the LLM tries to fix broken code, the system counts the errors. If the new code has *more* errors than the old code, the system rejects it. 
+> *Why we use it:* Without this, an LLM might fix a missing docstring but accidentally delete the database connection string, sending the repair loop into an infinite spiral of making things worse.
