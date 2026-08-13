@@ -1,0 +1,119 @@
+# Slide 2 — Business Objective
+*The repetition is where the risk lives*
+
+**Time: 4:15 · Ends 5:30**
+
+### Open (plain)
+
+> I want to talk about the actual problem we are solving here. It is not just about writing code faster. 
+> 
+> Let’s look at how data onboarding happens today. Somebody files a Jira ticket: "Please connect to the new Postgres database." An engineer picks it up, realizes the ticket doesn't mention the hostname or the credentials, and pings the requester. That thread takes two days because both people have other jobs. 
+> 
+> Once the engineer has the details, they don't write the connector from scratch. They open the last connector they wrote, copy it, and edit the variables. It goes to code review, where a colleague checks it against enterprise standards they are trying to remember at 4 PM on a Friday. It gets tested locally, pushed, and shipped. 
+> 
+> Six months later, an auditor asks: "Why is this connector doing this, and who approved it?" The honest answer is usually: "Go ask whoever wrote it, if they still work here."
+
+### Go deeper (technical)
+
+> The real thesis of this project is this: **The cost is not writing one connector. It is writing the fortieth.**
+> 
+> Writing one connector is a two-hour job. If automation just saves you two hours, that’s a script, not a product. But by the time you've written your fortieth connector, you have five basic methods—connect, test, fetch schema, read, close—that have been re-derived forty times, slightly differently each time. 
+> 
+> One engineer's connector retries database timeouts three times. Another engineer's retries five times. Another engineer accidentally logs the connection string, which is a massive security incident waiting to be discovered. 
+> 
+> **The variance is the cost, not the hours.** And variance is exactly what our architecture eliminates.
+> 
+> This tool satisfies four entirely different stakeholders at once:
+> 1. **The Requesting Team** wants self-service. They want to type what they need in plain English and get it done without waiting two weeks for a sprint cycle.
+> 2. **Engineering** wants to stop writing boilerplate. They would much rather review a clean, standardized diff than start from a blank file.
+> 3. **Security** wants structural guarantees. They don't want a "guideline" that says "don't hardcode passwords"—they want it to be mathematically impossible for a hardcoded password to pass the build step.
+> 4. **Compliance** wants a versioned artifact and an audit trail that proves exactly what was generated, when, and by what template. 
+
+
+---
+
+
+# Slide 4 — Architecture
+*Spec-First Generation, Deterministic Templating, and Defense-in-Depth*
+
+**Time: 4:30 · Ends 15:00**
+
+### Open (plain)
+
+> This is the whole system on one page. Five stages, left to right. A request comes in at the top and a secure, downloadable connector comes out at the end. 
+>
+> Walk it with me: **Extract** the raw data, **Refine** it if anything is missing, **Generate** the Python code, **Test** it in a secure sandbox, and **Deliver** the final package. 
+>
+> But how we actually do the *Generate* step is what makes this an enterprise-grade tool rather than just a wrapper around ChatGPT.
+
+### Go deeper (technical)
+
+> Let's focus on the architecture of that **Generate** box. 
+> 
+> The obvious way to build this tool would be to hand the LLM a standard template, ask it to fill in the code, and hope it follows the rules. That is called "Generate and Critique". We deliberately chose **not** to do that. Why? Because LLMs are probabilistic. Enforcing enterprise coding standards by asking an LLM to behave is enforcing standards by hope.
+> 
+> Instead, we use a **Spec-First** architecture.
+> 
+> **First, the Extraction.** The LLM never writes the Python code. Its only job is to read the natural language and extract the raw data—hostnames, ports, database names—into a strictly-typed JSON object called a `SourceSpec`. 
+>
+> **Second, Deterministic Generation.** We feed that JSON spec into a Jinja2 template. The template deterministically renders the Python connector. Because we use standard templates, the structure of the code is mathematically guaranteed to be identical every time. We achieve enterprise consistency *by construction*.
+> 
+> **Third, the Defense-in-Depth.** You might ask: if the template is standard and perfect, why do we have a validation stage checking 13 AST rules? Because of **Defense in Depth**. If a malicious user tricks the LLM into putting Python code inside a database name field, the Jinja template will blindly render it. The 13 static checks act as a firewall. 
+>
+> To give you a quick idea, these 13 checks fall into three main buckets:
+> 1. **Security:** We block any hardcoded credentials (enforcing that secrets must come from the environment), we reject dynamic SQL to prevent SQL injection, and we block dangerous calls like `eval()` or `os.system()`.
+> 2. **Architecture:** We enforce that the generated class strictly inherits from our internal `BaseConnector` and implements the required abstract methods.
+> 3. **Code Quality:** We ban `print()` statements in favor of structured logging, ban bare `except` blocks, and enforce that type hints and docstrings are present. 
+> 
+> By scanning the Abstract Syntax Tree (AST), we catch any of these violations *before* the code ever hits our execution sandbox.
+>
+> **Finally, the Repair Loop.** If the static checks *do* catch a flaw, the system enters a bounded Repair Loop. It feeds the specific AST errors back to the LLM and asks for a fix. But crucially, there is a **regression guard**: the system only accepts the LLM's fix if it strictly reduces the total number of errors. If the LLM hallucinates and makes the code worse, the change is discarded. The code quality only ever goes up.
+>
+> **To summarize:** The LLM extracts the data, the Jinja templates enforce the structure, and the 13 static checks guarantee the security.
+
+
+---
+
+
+# Slide 5 — Technology
+*The stack, and why each piece is there*
+
+**Time: 6:00 · Ends 21:00**
+
+### Open (plain)
+
+> I want to walk through the technical stack now. I won't just read the logos on the slide. For an engineering project, the most interesting thing about a stack isn't what you picked—it's what you rejected, and why. 
+> 
+> Let's go layer by layer: What the tool is, why we chose it, and exactly how it’s used here.
+
+### Go deeper (technical)
+
+> **First, the API Layer: FastAPI and Pydantic.** 
+> * **What it is:** FastAPI is a modern, asynchronous Python web framework, and Pydantic is a strict data validation library. 
+> * **Why:** We chose FastAPI because this application is heavily I/O bound. We spend a lot of time waiting for network calls to LLMs and databases. FastAPI's native `async`/`await` support means the server never blocks while waiting for Claude or Gemini to reply. 
+> * **How:** We use Pydantic to enforce boundaries. Request bodies and LLM outputs are declared as strict Pydantic models. This means no route handler starts with ten lines of "is this field present, is it a string?". If the LLM returns malformed JSON, Pydantic catches it immediately, and we retry the extraction, rather than letting bad data corrupt the system.
+>
+> **Second, the Code Generation: Jinja2.** 
+> * **What it is:** Jinja2 is a mature templating engine usually used for HTML. Here, we use it to generate Python.
+> * **Why:** One word: Determinism. If we let the LLM write the Python code directly, we are relying on hope to enforce enterprise standards. 
+> * **How:** We inject the strictly-validated Pydantic `SourceSpec` into a Jinja template. Same input, same bytes out, every time. A template can only produce what’s in the template. This makes our standards guarantee structural, rather than probabilistic.
+>
+> **Third, the Frontend: React 18, TypeScript, and Vite.**
+> * **What it is:** A single-page application built on React, strictly typed with TypeScript, and bundled using Vite.
+> * **Why:** We needed a dynamic, component-driven UI to handle the chat interface and the live code previews. We chose Vite over Webpack for near-instant hot module replacement (HMR), and TypeScript to ensure the frontend models perfectly mirror the backend Pydantic schemas. 
+> * **How:** The frontend holds no derived state. The FastAPI backend is the ultimate source of truth. The React app simply reads the server payload and renders the chat log based on that state. In production mode, FastAPI serves the compiled Vite assets directly, meaning zero CORS issues.
+>
+> **Fourth, the Validation Pipeline: Ruff, Black, and Bandit.**
+> * **What it is:** Ruff is a lightning-fast Rust-based linter, Black is an uncompromising code formatter, and Bandit is a security scanner.
+> * **Why:** To guarantee that the Jinja-generated code is perfectly clean and secure before we ever run it.
+> * **How:** We run these as subprocesses against the generated code's AST (Abstract Syntax Tree). If Bandit detects an `eval()` or if Ruff finds a bare `except` block, the pipeline halts and the code is sent to the LLM Repair Loop. 
+>
+> **Fifth, the Local Environment: Node.js Embedded Postgres & Bash.**
+> * **What it is:** We use plain bash scripts orchestrated by npm, and an embedded Postgres binary.
+> * **Why:** To ruthlessly reduce developer friction. We rejected Docker for the default local setup because managing daemon permissions and port conflicts kills productivity. 
+> * **How:** Running `npm run up` downloads a real Postgres binary and runs it as a background process locally. Everything from database seeding to frontend compilation is mapped to standard `npm run` commands, meaning a new developer can clone the repo and have the whole system running in under a minute without needing Docker.
+>
+> **Finally, the AI Layer: Anthropic & Google GenAI SDKs.**
+> * **What it is:** The official SDKs for Claude and Gemini foundation models.
+> * **Why:** We needed state-of-the-art reasoning for natural language extraction.
+> * **How:** We strictly use structured tool calling (`complete_json`). The LLMs are never asked to output free-form text unless they are writing the explanation document. Their sole job is to populate the strict JSON schemas we define, and we use a temperature of 0 to minimize hallucinations.

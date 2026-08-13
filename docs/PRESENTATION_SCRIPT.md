@@ -440,12 +440,147 @@ reason is the correct behaviour; failing silently would be the bug.
 > becomes genuinely dynamic — if the system has to decide the order at runtime —
 > that calculation changes and I'd revisit it.
 
+### The data, stage by stage — what actually flows through
+
+Roughly 4 minutes. This is the section that answers "but what is actually being
+passed between these boxes?" Do not read the field names as a list — group them
+and say what each group is *for*.
+
+> Let me take one request all the way through, and be specific about what exists
+> at each point. Because "a spec goes in and code comes out" is true but it
+> hides the interesting part.
+>
+> **Stage one, Extract.** Before the model sees anything, the prompt is scrubbed
+> for credentials, and the scrubbed version is kept — so there's a record of
+> exactly what was sent to the provider, not just what you typed.
+>
+> What comes back is an `ExtractionResult`, and it holds five things worth
+> naming. The **draft** itself. A **confidence** score. A list of **clarifying
+> questions**. Any **security findings** — if you pasted a password or the text
+> looked like a prompt injection, that's flagged here. And an
+> **unsupported-request** flag, for when someone asks for a source type this
+> system genuinely doesn't handle. That last one matters: the failure mode you
+> want to avoid is quietly mapping "onboard our Snowflake warehouse" onto
+> PostgreSQL because it's the closest thing available.
+>
+> The **draft** has around nineteen fields and every one of them is optional —
+> source type, connector name, host, port, database, schema, base URL,
+> pagination, auth method, environment prefix, and so on. Optional is the whole
+> point. A draft with holes in it is the normal case, not an error.
+>
+> And one field on it is the honesty mechanism: **`assumed_fields`**. Anything
+> the model filled in from convention rather than from your text is named there,
+> which is what the review screen displays back to you.
+>
+> **[EXPAND]** Each **question** carries six things, and I'd point at two of
+> them. There's the field it maps to, the question itself — and then a **`why`**,
+> and an **`example`**. Those two exist because the person answering may not be
+> an engineer. "What is the port?" and "What is the port? Postgres usually runs
+> on 5432, and we need it to build the connection string" have very different
+> answer rates.
+>
+> **Stage two, Refine**, takes those answers and writes them onto the named
+> fields. No model call, as I said.
+>
+> **Then a shape change, and this is my favourite part of the design.** The draft
+> gets promoted into a `SourceSpec`, and a `SourceSpec` is not a validated draft
+> — it's a genuinely different object.
+>
+> The draft is flat and permissive: nineteen loose optional fields sitting next
+> to each other. The spec is nested and strict. There's a **target**, and it is
+> *either* a SQL target — host, port, database, schema — *or* a REST target —
+> base URL, path, pagination, page size, rate limit. Never both, never neither.
+> There's an **auth** block: method, environment prefix, header name, token URL,
+> scopes. And there's an **options** block, which is the interesting one, because
+> it holds seven operational settings the user never mentioned and never had to:
+> read-only, connect timeout, query timeout, pool size, max retries, SSL mode,
+> TLS verification.
+>
+> So the spec carries operational policy that the requester was never asked
+> about, with sane defaults, applied uniformly. That's the fortieth-connector
+> argument again, expressed as a data structure.
+>
+> And because the target is one-or-the-other rather than a bag of optional
+> fields, it is structurally impossible to hand a REST base URL to the SQL
+> template. That's not a check that runs — it's a shape that can't be built.
+>
+> **Stage three, Generate**, is really four steps. The spec's source type and
+> auth method are joined into a **template key** — `postgresql:username_password`
+> — which the registry resolves to a specific template at a specific version.
+> Render. Then validate, which produces a **report**: how many checks ran, how
+> many passed, which external tools ran, which were skipped, and every individual
+> finding.
+>
+> **[EXPAND]** Each finding carries a check name, a severity, a message, a line
+> number, which tool raised it — and a **remedy**. That remedy field is not for
+> you; it's what gets fed to the repair loop, so the model is told what to do
+> rather than left to infer it.
+>
+> If it failed, repair runs — and every attempt is recorded: iteration number,
+> errors before, errors after, and whether it was accepted. Those records ship
+> with the artifact, so nobody has to take the repair loop's word for it.
+>
+> What comes out is a **`GeneratedConnector`**: the code, the spec it came from,
+> the validation report, the template key and version, a checksum of the spec, a
+> checksum of the code, and the repair history. From those it computes three
+> things — whether it's **accepted**, the **code checksum**, and the **version
+> number**, whose patch component is the repair count.
+>
+> Then documentation is generated: a README, a pinned requirements file, and a
+> prose explanation — and the explanation records **where it came from**, model
+> or deterministic fallback. Provenance on the prose as well as on the code.
+>
+> **Stage four, Test**, returns a `SandboxResult`, and the field I'd point at is
+> **`stage`**. It's one of import, resolve, construct, connect, or schema. So a
+> failure doesn't just say it failed — it says how far it got. Failing at
+> "connect" is a wrong password. Failing at "import" is a missing driver. Those
+> are completely different problems and you can tell them apart without reading a
+> traceback.
+
+### Stage five — what is actually in the artifact
+
+> **Five files.** The connector module. A README. A `requirements.txt` with
+> pinned versions. An `EXPLANATION.md` — prose, labelled with whether a model or
+> the fallback wrote it. And a `manifest.json`.
+>
+> The manifest is the one that matters in six months, and it has five sections.
+>
+> **Source** — what this connects to. Type, class name, whether it's read-only,
+> and the target as host, port and database. No credentials, by construction.
+>
+> **Provenance** — the chain. Template key, template version, spec checksum, code
+> checksum, when it was generated, and how many repair iterations it took.
+>
+> **Validation** — passed or not, checks run, checks passed, conformance
+> percentage, which tools ran, which were skipped, and every error and warning in
+> full. Note *tools skipped* is recorded: if bandit wasn't installed, the
+> manifest says the security scan didn't run rather than implying it passed.
+>
+> **Connectivity** — and this one has two states. If it was never tested, the
+> manifest says `tested: false`, explicitly. If it was, you get success, the
+> stage it reached, how many tables were discovered, and how long it took.
+>
+> That distinction is deliberate. An untested connector and a connector that
+> passed its test must never look the same to somebody reading the manifest
+> later. Silence is not a pass.
+>
+> **Required env** — the environment variables this connector needs, by **name
+> only**. Never values. There's a test whose entire job is to serialise the
+> manifest and assert no secret appears in it.
+>
+> And the packaging is byte-reproducible: the zip's internal timestamps are
+> fixed rather than read from the clock, so building the same artifact twice
+> gives you an identical file. Which is what makes the checksum an identity
+> rather than a record of when you happened to press the button.
+
 ### Land it
 
-> One more property worth noting: failure is a return value at every stage, not
+> One property that holds across all five stages: failure is a return value, not
 > an exception. A rejected connector still comes back, with its report. A failed
-> connection still comes back, with the driver's real error message. The UI
-> always has something to show, because the interesting cases are the failures.
+> connection still comes back, with the driver's real error message and the stage
+> it died at. The UI always has something to show — because the failures are the
+> interesting cases, and a pipeline that throws them away is a pipeline you
+> cannot debug.
 
 ### Follow-ups
 
@@ -474,6 +609,41 @@ are the reason anybody would trust the output.
 You see the extracted spec before anything is generated — that's slide 8. The
 whole design assumes extraction is fallible; that's why review comes before
 generation rather than after.
+
+**Q: Why two spec models? Why not one model with optional fields?**
+Because "a description of what the user said" and "a thing you may generate code
+from" are different objects with different rules, and collapsing them means
+every downstream function has to re-check completeness. With two, the check
+happens once at promotion, and after that the type is the proof. A function
+taking a `SourceSpec` cannot be handed an incomplete one — not by convention,
+but because the object couldn't be constructed.
+
+**Q: Where do the connector options come from if the user never states them?**
+Defaults on the spec model — timeouts, pool size, retries, SSL mode. That's
+deliberate: they're operational policy, they should be uniform across every
+connector, and asking a requester to choose a pool size would be a worse
+product. Changing the default changes it everywhere at once, which is the same
+argument as the template.
+
+**Q: Is the manifest signed?**
+No, and I'd flag that as the honest gap in the provenance story. Everything is
+checksummed, so tampering is *detectable* if you have a trusted copy of the
+checksum — but nothing cryptographically binds the manifest to a producer.
+Signing the artifact at packaging time is the obvious extension and it doesn't
+change any of the surrounding design.
+
+**Q: If I never run the connection test, what does the manifest say?**
+`connectivity: {tested: false}` — explicitly. That's a design decision rather
+than an accident: an untested connector and a passing one must never be
+indistinguishable to somebody reading the record later. Absence of evidence gets
+written down as absence of evidence.
+
+**Q: Why record where the explanation came from?**
+Because one path is a model and the other is a deterministic fallback used when
+no provider is configured, and the reader deserves to know which they're
+reading. It's the same instinct as `assumed_fields` — anywhere the system's
+confidence differs from its output, say so in the artifact rather than in the
+docs.
 
 ---
 
