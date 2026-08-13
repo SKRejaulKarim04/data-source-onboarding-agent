@@ -747,7 +747,52 @@ def build(shots: Path, out: Path) -> Path:
         "The model reads intent; the template writes the code; the checker decides what ships.",
     )
 
-    # --- 12. Conclusion ------------------------------------------------------
+    # --- 12. Future scope ----------------------------------------------------
+
+    table_slide(
+        prs,
+        "Future scope",
+        "From a working system to a production one",
+        ["Area", "Where it is today", "What production needs"],
+        [
+            [
+                "State & concurrency",
+                "In memory, synchronous — one request at a time",
+                "Postgres plus a worker queue. The store is four methods, so it is a swap",
+            ],
+            [
+                "Sandbox",
+                "Process isolation: timeout, memory cap, scrubbed environment",
+                "The same runner inside a non-root container, egress allowlisted to the target",
+            ],
+            [
+                "Secrets",
+                "Passed transiently for one call, never stored",
+                "A broker issuing scoped, time-boxed leases, audited on redemption",
+            ],
+            [
+                "Orchestration",
+                "Run once, by hand, from the browser",
+                "An Airflow DAG imports the connector; from_env() maps onto an Airflow Connection",
+            ],
+            [
+                "Ingestion",
+                "Schema discovery only",
+                "Discover → extract on a watermark → load, as three tasks in one DAG",
+            ],
+            [
+                "Drift",
+                "Nobody notices when the source changes",
+                "Scheduled fetch_schema(), diffed against the spec; divergence opens a PR",
+            ],
+        ],
+        standfirst="None of this is a redesign — every row swaps one component behind an "
+        "interface that already exists.",
+        note="The manifest already lists required_env by name, and that is precisely the set of "
+        "fields an Airflow Connection has to carry. The handover was built for this.",
+    )
+
+    # --- 13. Conclusion ------------------------------------------------------
 
     bullets_slide(
         prs,

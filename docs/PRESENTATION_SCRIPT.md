@@ -27,28 +27,59 @@ not at slide 11.
 
 ### Calibrating to your own pace
 
-The spoken text here is **4,217 words** in the core script, **4,494** with every
-EXPAND block included. Divide by your own speaking rate:
+**Read this before you rehearse.** The script as written is longer than the slot.
+Everything below is measured, not estimated.
 
-| Pace | Core | With EXPAND |
+| | Words | @130 wpm | @140 wpm |
+|---|---|---|---|
+| Core script | 5,862 | 45.1 min | 41.9 min |
+| With every EXPAND block | 6,316 | 48.6 min | 45.1 min |
+
+Word count also *under*-predicts real delivery by 10–15%, because pauses, slide
+transitions and small interruptions aren't in it. So the full script is roughly
+**50 minutes in the room** — comfortably over a 40-minute slot.
+
+That is deliberate: it is easier to cut from a full script than to improvise into
+a thin one. But you must decide the cuts **before** you present, not at slide 11.
+
+### Where the time actually is
+
+| Slide | Words | @130 wpm |
 |---|---|---|
-| 130 wpm (measured, deliberate) | 32.4 min | 34.6 min |
-| 140 wpm (normal) | 30.1 min | 32.1 min |
-| 150 wpm (brisk) | 28.1 min | 30.0 min |
+| 1 · Title | 196 | 1.5 |
+| 2 · Business objective | 339 | 2.6 |
+| 3 · The core idea | 717 | 5.5 |
+| **4 · Architecture** | **1,469** | **11.3** |
+| **5 · Technology** | **1,122** | **8.6** |
+| 6–11 · The working product | 1,204 | 9.3 |
+| 12 · Future scope | 607 | 4.7 |
+| 13 · Conclusion | 208 | 1.6 |
 
-Word count *under*-predicts real delivery by roughly 10–15%, because pauses,
-slide transitions, looking at the screen and small interruptions aren't in the
-count. So the full script realistically occupies **35–39 minutes** in the room at
-a deliberate pace. That is the right size for a 40-minute slot where questions
-come at the end, and slightly too long if questions are expected throughout.
+Slides 4 and 5 are 44% of the script between them. That is where the cuts live.
 
-**If you need to fill more time**, don't slow down — tell another war story.
-The challenge bank near the end of this document has ten, of which only three
-are placed in the script. Each one is about 90 seconds spoken, and they land far
-better than padding an explanation.
+### Cutting to fit
+
+**For a 40-minute slot with ~6 minutes of questions, target 33 minutes of talk.**
+Make these four cuts and you land there:
+
+1. **Slide 4 — drop "The data, stage by stage" from the shape change onward**
+   (keep draft → spec, drop the per-stage field walk). Saves ~5 min. Keep
+   "Stage five — what is in the artifact"; it's the payoff.
+2. **Slide 5 — compress four of the eight rows to one line each.** Keep the full
+   treatment for Jinja2, the validation layer, the sandbox, and pytest. Saves
+   ~3 min.
+3. **Drop every [EXPAND] block.** Saves ~3.5 min.
+4. **Slide 3 — cut the oscillating-repair-loop war story** only if you are still
+   over. It is the best story in the deck, so cut it last.
+
+That leaves roughly 33 minutes of script, ~37 in the room.
+
+**If you finish early**, don't slow down — tell another war story. The challenge
+bank has ten and only three are placed in the script. Each runs about 90 seconds
+and lands far better than padding an explanation.
 
 **Rehearse once with a timer.** Your real rate is the only number that matters,
-and you will discover it is not the one you assumed.
+and it will not be the one you assumed.
 
 ### Timing
 
@@ -65,8 +96,9 @@ and you will discover it is not the one you assumed.
 | 9 | Product 4 · Generated code | 25:15 | 1:30 |
 | 10 | Product 5 · Live connection | 26:45 | 1:45 |
 | 11 | Product 6 · Artifact | 28:30 | 1:15 |
-| 12 | Conclusion | 29:45 | 2:15 |
-| | **Script ends** | **32:00** | |
+| 12 | Future scope | 29:45 | 3:00 |
+| 13 | Conclusion | 32:45 | 2:15 |
+| | **Script ends** | **35:00** | |
 
 ---
 
@@ -1182,11 +1214,145 @@ Names only, never values. That's deliberate and it's tested.
 
 ---
 
-# Slide 12 — Conclusion
+# Slide 12 — Future scope
+
+*From a working system to a production one*
+
+**Time: 3:00 · Ends 32:45**
+
+This is the slide that decides whether the room thinks you understand the
+difference between a demo and a system. Volunteer the gaps before anyone finds
+them.
+
+### Open (plain)
+
+> Everything I've shown you works. It is not, however, in production, and I want
+> to be precise about the difference rather than let you wonder.
+>
+> Read the middle column as a list of things I know are wrong with it. Because
+> the fastest way to lose a room is to have someone find a limitation you didn't
+> mention.
+
+### Go deeper (technical)
+
+> **State and concurrency.** The request store is a dictionary in memory. Restart
+> the server and in-flight work is gone, and it handles one request at a time.
+> That's the right call for a single-user demo and the wrong one for a
+> deployment. The fix is small because the store is four methods — create, get,
+> delete, list — so putting it in Postgres is a class, not a refactor. Generate
+> and test move onto a worker queue and the UI polls.
+>
+> **The sandbox.** I said earlier this is process isolation, not kernel
+> isolation, and that's the honest limit. Production runs the *same* runner
+> inside a non-root container with a read-only filesystem and egress allowlisted
+> to just the target host. The interface doesn't change at all — only the
+> strength of the box around it.
+>
+> **Secrets.** Today they're passed transiently for one call and never stored,
+> which is correct while a human is present to type them. It doesn't survive a
+> scheduled job at three in the morning. That needs a broker issuing scoped,
+> time-boxed leases, with an audit trail of which run redeemed which lease
+> against which host.
+
+### The Airflow half — where this actually gets used
+
+> Now the part that matters most, because it's the difference between generating
+> a connector and *operating* one.
+>
+> Right now you press a button in a browser and it runs once. That's not how
+> data teams consume connectors. They want it running on a schedule, in their
+> orchestrator, with the rest of their pipelines.
+>
+> **And here's the detail I'd point at.** The generated connector reads its
+> configuration entirely from environment variables, and it builds itself with a
+> single call — `from_env()`. That is exactly the shape Airflow wants. An Airflow
+> Connection holds host, port, database, user and password; our connector reads
+> host, port, database, user and password from the environment. So a DAG imports
+> the module and calls `from_env()`, and there is no adapter, no wrapper, no
+> glue class in between.
+>
+> That isn't luck, and I don't want to oversell it as foresight either — it falls
+> out of the no-hardcoded-credentials standard. We forced configuration into the
+> environment for a security reason, and the payoff turned out to be
+> orchestrator compatibility.
+>
+> **And the manifest closes the loop.** It already lists `required_env` by name —
+> which is precisely the set of fields somebody has to configure in the Airflow
+> Connection. The handover document is already the setup instructions.
+>
+> **[EXPAND]** Once it's in a DAG, the pipeline becomes three tasks rather than
+> one. Discover — `fetch_schema()`, which we already have. Extract — read
+> incrementally against a watermark, so each run picks up where the last one
+> stopped. Load — into staging, then the warehouse. The connector we generate is
+> the first two of those three.
+>
+> **Drift.** And this is the one I find most interesting. Once connectors are
+> running on a schedule, you can run `fetch_schema()` on a timer and diff what
+> the source *actually* looks like against the spec the connector was generated
+> from. When they diverge — someone added a column, someone changed a type — the
+> system regenerates and opens a pull request.
+>
+> Every piece needed for that already exists. The sandbox returns real schema.
+> Every artifact records the spec checksum it came from. What's missing is the
+> scheduler and the diff, and that's the first thing I'd build next.
+
+### Land it
+
+> The line at the top is the point of the whole slide: **none of this is a
+> redesign.** Every row swaps one component behind an interface that already
+> exists. That's what the boundaries in the architecture were for — not
+> tidiness, but so that the production version of each stage is a substitution
+> rather than a rewrite.
+
+### Follow-ups
+
+**Q: Why isn't it production ready already?**
+Because production readiness is mostly infrastructure, and infrastructure is the
+part that proves nothing about the idea. I spent the time on the thing that
+carries the argument — the standards gate and its test suite — and left the
+durable store and the container as known, bounded work. I'd rather show you a
+proven gate and an honest list of gaps than a deployed system with an unproven
+one.
+
+**Q: Why Airflow specifically? Why not Dagster, or Prefect, or dbt?**
+Nothing in the design is Airflow-specific — that's rather the point. The
+connector is a plain Python class that configures itself from the environment,
+so anything that can import a module and set environment variables can run it.
+Airflow is the example because it's the most common, and because its Connection
+model maps one-to-one onto our environment prefix. Dagster or Prefect would be
+the same amount of work.
+
+**Q: Would the connector become an Airflow operator or a hook?**
+A hook, and I'd resist making it an operator. A hook is a connection; an
+operator is a unit of work. Our connector is a connection with a schema-reading
+method attached, so it's a hook — and keeping it a plain class means it also
+works from a script, a notebook, or a test, which an operator wouldn't.
+
+**Q: How do you handle incremental loads? Full extracts don't scale.**
+Watermark-based reads, and it's genuinely not built yet. The connector has
+`read()` with bound parameters, so the query shape is there; what's missing is
+the state that remembers the last watermark per source, which belongs in the
+same durable store as everything else on this slide.
+
+**Q: What about schema changes breaking a running pipeline?**
+That's the Drift row, and it's the strongest argument for the whole provenance
+chain. Because every artifact records the spec checksum it was generated from,
+"has this source changed since we generated the connector?" is a diff rather
+than an investigation. Detecting it is easy once you're scheduled. Deciding what
+to do about it is the interesting part, and I'd default to opening a pull
+request rather than auto-deploying.
+
+**Q: What's the single highest-value next step?**
+Durable state, because everything else on this slide depends on it — the queue,
+the watermark, the schedule, and the drift history all need somewhere to live.
+
+---
+
+# Slide 13 — Conclusion
 
 *Standards you can prove, not standards you hope for*
 
-**Time: 2:15 · Ends 32:00**
+**Time: 2:15 · Ends 35:00**
 
 Slow down. Do not rush the last slide because you're relieved.
 
@@ -1224,13 +1390,9 @@ Slow down. Do not rush the last slide because you're relieved.
 ### Follow-ups
 
 **Q: What would you do next?**
-Three things in order. Durable state, because the in-memory store is the clearest
-production gap. Then a background queue for generate and test, so it handles
-concurrent users. Then the thing I actually find most interesting: a drift
-watcher that re-runs the connection test on a schedule, compares the observed
-schema against the spec that generated the connector, and opens a pull request
-when they diverge. Every piece needed for that already exists — the sandbox
-returns real schema, and every artifact records the spec it came from.
+Covered on the previous slide, so keep this short if it comes up again: durable
+state first, because the queue, the watermark and the drift history all need
+somewhere to live. Then the Airflow path. Then the drift watcher.
 
 **Q: What's the biggest weakness?**
 The template coverage. Four source types is enough to prove the architecture and
