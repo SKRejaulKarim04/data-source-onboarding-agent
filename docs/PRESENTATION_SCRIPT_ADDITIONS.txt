@@ -129,25 +129,21 @@
 
 **Time: 8:30 · Ends 10:00**
 
-### Open (plain)
-
 > To wrap things up, I want to talk about what we actually proved here today, and what comes next.
 >
 > We started with a simple goal: make it faster to onboard data. But we ended up building something much more important: a system that mathematically guarantees enterprise standards while still giving users the magic of an AI chat interface. 
-
-### Go deeper (technical)
-
-> **The Conclusion:**
-> We successfully shifted the paradigm from "Generate and Critique" to a **"Spec-First Architecture."** By restricting the LLM to extracting JSON data, and using Jinja templates to generate the Python code, we achieved absolute determinism. We proved that in an enterprise setting, LLMs are best used as intelligent parsers, not as unreliable code monkeys. 
+>
+> We successfully shifted the paradigm from "Generate and Critique" to a **"Spec-First Architecture."** By restricting the LLM to extracting JSON data, and using Jinja templates to generate the Python code, we achieved absolute determinism. We proved that in an enterprise setting, LLMs are best used as intelligent parsers, not as unreliable code monkeys. The 13 AST checks and the automated Repair Loop act as our Defense-in-Depth, ensuring that even if a prompt injection occurs, malicious code can never reach production.
 > 
-> The 13 AST checks and the automated Repair Loop act as our Defense-in-Depth, ensuring that even if a prompt injection occurs, malicious code can never reach production.
+> **Future Work & Production Readiness:**
+> While the core engine is fully operational, here are the next steps required to make this platform fully production-ready at enterprise scale:
 > 
-> **Future Work:**
-> While the core engine is fully operational, there are three clear next steps to scale this platform:
-> 
-> 1. **Broader Template Ecosystem:** We currently support core databases. The next step is adding templates for massive data warehouses like Snowflake and BigQuery, and NoSQL stores like MongoDB. The architecture supports this trivially—we just drop a new Jinja file into the templates folder.
-> 2. **CI/CD Integration:** Right now, the system outputs a secure `.zip` file for the developer. The next iteration will integrate directly with our Git pipelines, automatically opening a Pull Request with the generated code. 
-> 3. **RAG for Internal Context:** We plan to hook the LLM extraction phase into our internal documentation using Retrieval-Augmented Generation (RAG). That way, if a user asks for "the marketing database", the agent automatically looks up the hostname and port without the user having to type them.
+> **1. CI/CD Pipeline Integration:** Right now, the system outputs a secure `.zip` file. The next iteration will integrate directly with our Git pipelines to automatically open Pull Requests with the generated code. 
+> **2. Enterprise Authentication & RBAC:** We will integrate an SSO layer (Single Sign-On) and Role-Based Access Control. This ensures that only authorized engineers can generate connectors for highly sensitive data sources, like HR or finance databases.
+> **3. Telemetry & Observability:** Before we release this company-wide, we will add Prometheus metrics and Grafana dashboards to track LLM latency, generation success rates, and how often the repair loop gets triggered.
+> **4. Containerized Orchestration:** Moving from local Node/Python environments to full Kubernetes deployments using Docker, allowing the backend to scale horizontally during periods of high demand.
+> **5. RAG for Internal Context:** We plan to hook the LLM extraction phase into our internal documentation using Retrieval-Augmented Generation (RAG). That way, if a user asks for "the marketing database", the agent automatically looks up the hostname and port without the user having to type them.
+> **6. Broader Template Ecosystem:** Finally, we will add templates for massive data warehouses like Snowflake and BigQuery. The architecture supports this trivially—we just drop a new Jinja file into the templates folder.
 
 
 ---
